@@ -14,7 +14,7 @@ function mondayOf(d: Date): string {
 const addDays = (iso: string, n: number) => new Date(new Date(iso + 'T00:00:00Z').getTime() + n * 864e5).toISOString().slice(0, 10);
 const pctD = (a: number, b: number) => (b ? (a - b) / Math.abs(b) : null);
 
-type Agg = { product: string; cost: number; revenue: number; orders: number };
+type Agg = { product: string; image: string | null; cost: number; revenue: number; orders: number };
 
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
@@ -27,13 +27,13 @@ export async function GET(req: NextRequest) {
   const prevStart = addDays(end, -56);
 
   const q = (from: string, to: string) => pool.query<Agg & { product_id: string }>(
-    `select g.product_id, coalesce(p.title, '(unknown product)') product,
+    `select g.product_id, coalesce(p.title, '(unknown product)') product, p.main_image_url image,
        round(sum(g.cost))::int cost, round(sum(g.gross_revenue))::int revenue, sum(g.orders)::int orders
      from gmv_max_product_stat_daily g
      join gmv_max_campaign gc on gc.id = g.campaign_id
      left join product p on p.id = g.product_id
      where gc.shop_id = any($1) and g.date >= $2 and g.date < $3
-     group by g.product_id, p.title
+     group by g.product_id, p.title, p.main_image_url
      having sum(g.cost) > 0`, [shopIds, from, to]);
 
   try {
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
         const pCpo = pv && pv.orders ? pv.cost / pv.orders : null;
         const pAov = pv && pv.orders ? pv.revenue / pv.orders : null;
         return {
-          product: r.product,
+          product: r.product, image: r.image,
           cost: r.cost, costPct: pv ? pctD(r.cost, pv.cost) : null,
           revenue: r.revenue, revenuePct: pv ? pctD(r.revenue, pv.revenue) : null,
           roi, roiPct: roi !== null && pRoi !== null ? pctD(roi, pRoi) : null,

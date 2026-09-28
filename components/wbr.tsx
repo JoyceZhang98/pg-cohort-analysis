@@ -244,7 +244,7 @@ export function Funnel({ brand, week }: { brand: string; week: string | null }) 
 
 // ---------- Advertising by Product ----------
 type AdRow = {
-  product: string;
+  product: string; image: string | null;
   cost: number; costPct: number | null; revenue: number; revenuePct: number | null;
   roi: number | null; roiPct: number | null; orders: number; ordersPct: number | null;
   cpo: number | null; cpoPct: number | null; aov: number | null; aovPct: number | null;
@@ -290,7 +290,14 @@ export function AdsByProduct({ brand, week }: { brand: string; week: string | nu
             <tbody>
               {data.rows.map(r => (
                 <tr key={r.product}>
-                  <td className="lead metric">{r.product}</td>
+                  <td className="lead metric">
+                    <div className="prodcell">
+                      {r.image
+                        ? <img className="prodimg" src={r.image} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                        : <span className="prodimg ph" />}
+                      <span className="prodname">{r.product}</span>
+                    </div>
+                  </td>
                   {adCell(r.cost, 'money', r.costPct, true)}
                   {adCell(r.revenue, 'money', r.revenuePct)}
                   {adCell(r.roi, 'x', r.roiPct)}
