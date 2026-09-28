@@ -31,25 +31,26 @@ export async function GET(req: NextRequest) {
         count(distinct tcc.affiliate_id) filter (where tcc.created_at >= $2 and tcc.created_at < $3) cur,
         count(distinct tcc.affiliate_id) filter (where tcc.created_at >= $4 and tcc.created_at < $2) prev
         from target_collaboration_creator tcc join target_collaboration tc on tc.id = tcc.target_collaboration_id
-        where tc.shop_id = any($1)`, [s, start, end, prevStart]),
+        where tc.shop_id = any($1) and tcc.created_at >= $4 and tcc.created_at < $3`, [s, start, end, prevStart]),
       pool.query(`select
         count(distinct affiliate_id) filter (where created_at >= $2 and created_at < $3) cur,
         count(distinct affiliate_id) filter (where created_at >= $4 and created_at < $2) prev
-        from sample where shop_id = any($1)`, [s, start, end, prevStart]),
+        from sample where shop_id = any($1) and created_at >= $4 and created_at < $3`, [s, start, end, prevStart]),
       pool.query(`select
         count(distinct sm.affiliate_id) filter (where to_timestamp(sa.event_timestamp) >= $2 and to_timestamp(sa.event_timestamp) < $3) cur,
         count(distinct sm.affiliate_id) filter (where to_timestamp(sa.event_timestamp) >= $4 and to_timestamp(sa.event_timestamp) < $2) prev
         from sample_activity sa join sample sm on sm.id = sa.sample_id
-        where sm.shop_id = any($1) and sa.new_status = 'AWAITING_SHIPMENT'`, [s, start, end, prevStart]),
+        where sm.shop_id = any($1) and sa.new_status = 'AWAITING_SHIPMENT'
+          and to_timestamp(sa.event_timestamp) >= $4 and to_timestamp(sa.event_timestamp) < $3`, [s, start, end, prevStart]),
       pool.query(`select count(distinct affiliate_id) cur from sample where shop_id = any($1) and status = 'CONTENT_PENDING'`, [s]),
       pool.query(`select
         count(distinct affiliate_id) filter (where video_post_time >= $2 and video_post_time < $3) cur,
         count(distinct affiliate_id) filter (where video_post_time >= $4 and video_post_time < $2) prev
-        from video where shop_id = any($1) and affiliate_id is not null`, [s, start, end, prevStart]),
+        from video where shop_id = any($1) and affiliate_id is not null and video_post_time >= $4 and video_post_time < $3`, [s, start, end, prevStart]),
       pool.query(`select
         count(distinct affiliate_id) filter (where create_time >= $2 and create_time < $3) cur,
         count(distinct affiliate_id) filter (where create_time >= $4 and create_time < $2) prev
-        from affiliate_order where shop_id = any($1)`, [s, start, end, prevStart]),
+        from affiliate_order where shop_id = any($1) and create_time >= $4 and create_time < $3`, [s, start, end, prevStart]),
     ]);
     const N = (r: any, k = 'cur') => Number(r.rows[0]?.[k]) || 0;
     const stage = (label: string, sub: string, r: any, snapshot = false) => ({
