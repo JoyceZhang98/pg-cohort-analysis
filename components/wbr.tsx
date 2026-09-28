@@ -58,6 +58,7 @@ export function Spark({ values, inverse }: { values: (number | null)[]; inverse?
 type Row = {
   label: string; fmt: Fmt; inverse?: boolean;
   weekly: (number | null)[]; wowAbs: number | null; wowPct: number | null; mtd: number | null; momPct: number | null;
+  children?: Row[];
 };
 type Tree = { weeks: string[]; groups: { name: string; rows: Row[] }[]; reportWeek: string };
 type WbrData = { brand: string; reportWeek: string; availableWeeks: string[]; tree: Tree; error?: string };
@@ -71,6 +72,10 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
   const [data, setData] = useState<WbrData | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (label: string) => setOpen(prev => {
+    const n = new Set(prev); n.has(label) ? n.delete(label) : n.add(label); return n;
+  });
 
   useEffect(() => {
     setLoading(true); setErr('');
@@ -86,6 +91,17 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
   if (loading) return <div className="state">Loading {brand}…</div>;
   if (err) return <div className="state err">Error: {err}</div>;
   if (!data) return null;
+
+  const cellsFor = (r: Row) => (
+    <>
+      {r.weekly.map((v, i) => <td key={i} className="num">{fmtVal(v, r.fmt)}</td>)}
+      <td className="num"><Spark values={r.weekly} inverse={r.inverse} /></td>
+      <td className="num" style={{ color: deltaColor(r.wowAbs, r.inverse) }}>{fmtDelta(r.wowAbs, r.fmt)}</td>
+      <td className="num" style={{ color: deltaColor(r.wowPct, r.inverse) }}>{r.wowPct === null ? '—' : (r.wowPct >= 0 ? '+' : '') + (r.wowPct * 100).toFixed(1) + '%'}</td>
+      <td className="num strong">{fmtVal(r.mtd, r.fmt)}</td>
+      <td className="num" style={{ color: deltaColor(r.momPct, r.inverse) }}>{r.momPct === null ? '—' : (r.momPct >= 0 ? '+' : '') + (r.momPct * 100).toFixed(1) + '%'}</td>
+    </>
+  );
 
   return (
     <div className="tablecard">
@@ -108,17 +124,27 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
           {data.tree.groups.map(g => (
             <Fragment key={g.name}>
               <tr className="grouprow"><td colSpan={data.tree.weeks.length + 5}>{g.name}</td></tr>
-              {g.rows.map(r => (
-                <tr key={r.label}>
-                  <td className="lead metric">{r.label}</td>
-                  {r.weekly.map((v, i) => <td key={i} className="num">{fmtVal(v, r.fmt)}</td>)}
-                  <td className="num"><Spark values={r.weekly} inverse={r.inverse} /></td>
-                  <td className="num" style={{ color: deltaColor(r.wowAbs, r.inverse) }}>{fmtDelta(r.wowAbs, r.fmt)}</td>
-                  <td className="num" style={{ color: deltaColor(r.wowPct, r.inverse) }}>{r.wowPct === null ? '—' : (r.wowPct >= 0 ? '+' : '') + (r.wowPct * 100).toFixed(1) + '%'}</td>
-                  <td className="num strong">{fmtVal(r.mtd, r.fmt)}</td>
-                  <td className="num" style={{ color: deltaColor(r.momPct, r.inverse) }}>{r.momPct === null ? '—' : (r.momPct >= 0 ? '+' : '') + (r.momPct * 100).toFixed(1) + '%'}</td>
-                </tr>
-              ))}
+              {g.rows.map(r => {
+                const hasKids = !!r.children?.length;
+                const isOpen = open.has(r.label);
+                return (
+                  <Fragment key={r.label}>
+                    <tr className={hasKids ? 'expandable' : ''} onClick={hasKids ? () => toggle(r.label) : undefined}>
+                      <td className="lead metric">
+                        {hasKids ? <span className="twist">{isOpen ? '▾' : '▸'}</span> : <span className="twist sp" />}
+                        {r.label}
+                      </td>
+                      {cellsFor(r)}
+                    </tr>
+                    {hasKids && isOpen && r.children!.map(ch => (
+                      <tr key={r.label + '/' + ch.label} className="childrow">
+                        <td className="lead metric child">{ch.label}</td>
+                        {cellsFor(ch)}
+                      </tr>
+                    ))}
+                  </Fragment>
+                );
+              })}
             </Fragment>
           ))}
         </tbody>

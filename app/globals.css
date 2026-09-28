@@ -123,3 +123,12 @@ td.strong, .strong { font-weight: 700; }
   table.wbr tbody tr:hover, table.exec tbody tr:hover { background: #161b27; }
   :root { --zebra: #141824; }
 }
+
+/* ---------- drill-down rows ---------- */
+tr.expandable { cursor: pointer; }
+tr.expandable:hover { background: var(--zebra); }
+.twist { display: inline-block; width: 14px; color: var(--accent); font-size: 10px; margin-right: 6px; }
+.twist.sp { color: transparent; }
+tr.childrow td { background: var(--zebra); border-bottom: 1px solid var(--line); }
+tr.childrow td.child { padding-left: 34px; font-weight: 500; color: var(--muted); font-style: normal; }
+tr.childrow td.num { color: var(--muted); }
