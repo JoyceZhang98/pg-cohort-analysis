@@ -84,6 +84,7 @@ export default function Page() {
 
       {tab === 'internal' && (
         <section>
+          <p className="sub">Internal ops views not on the Brand Dashboard — the sample-outreach funnel, per-product ad performance, and creator cohorts.</p>
           <div className="controls">
             <label className="ctl"><span>SCOPE</span>
               <select value={internalScope} onChange={e => setInternalScope(e.target.value)}>
@@ -92,9 +93,7 @@ export default function Page() {
               </select>
             </label>
             <WeekPicker />
-            <EmvInputs />
           </div>
-          <MetricTree brand={internalScope} week={week} emvV={emvV} emvE={emvE} onMeta={onMeta} />
           <Funnel brand={internalScope} week={week} />
           <AdsByProduct brand={internalScope} week={week} />
           <Cohort brand={internalScope === 'all' ? 'new-chapter' : internalScope} />
