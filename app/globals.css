@@ -5,6 +5,10 @@
   --line: #eef0f5;
   --chip: #f4f5f9;
   --accent: #6a5cff;
+  --up: #129d6b;
+  --down: #d23f52;
+  --band: #2b3350;
+  --zebra: #fafbfd;
 }
 
 * { box-sizing: border-box; }
@@ -66,4 +70,56 @@ td { text-align: center; }
   :root { --bg:#0f1117; --ink:#eef0f7; --muted:#8a92a8; --line:#232838; --chip:#1b1f2b; }
   .seg button.on { background:#2a3040; color:#fff; }
   .cell { color: #10131c; }
+}
+
+/* ---------- WBR additions ---------- */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 8px 0 24px; flex-wrap: wrap; }
+.tabs button {
+  border: 0; background: transparent; color: var(--muted); font-weight: 600; font-size: 14px;
+  padding: 10px 16px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+
+.controls { align-items: flex-end; }
+.ctl { display: flex; flex-direction: column; gap: 6px; }
+.ctl span { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--muted); }
+.ctl select, .ctl input {
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  border-radius: 9px; padding: 9px 12px; font-size: 14px; font-weight: 600; min-width: 130px;
+}
+.ctl input { min-width: 90px; }
+
+table.wbr, table.exec { border-collapse: collapse; border-spacing: 0; width: 100%; font-size: 13px; }
+table.wbr th, table.exec th {
+  text-align: right; font-size: 11px; font-weight: 700; color: var(--muted); padding: 6px 12px;
+  border-bottom: 1px solid var(--line); white-space: nowrap; letter-spacing: .03em;
+}
+table.wbr th.lead, table.exec th.lead { text-align: left; }
+table.wbr td, table.exec td { padding: 7px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.wbr td.num, table.exec td.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.wbr td.lead.metric, table.exec td.lead.metric { text-align: left; font-weight: 600; }
+table.wbr tbody tr:hover, table.exec tbody tr:hover { background: var(--zebra); }
+.grouprow td { background: var(--band); color: #fff; font-weight: 700; font-size: 12px; letter-spacing: .04em; padding: 6px 12px; }
+td.strong, .strong { font-weight: 700; }
+.exec .badge { font-size: 11px; font-weight: 700; margin-top: 2px; }
+.exec .totalrow td { border-top: 2px solid var(--ink); font-weight: 700; background: var(--zebra); }
+.exec td.num .strong { font-size: 15px; }
+
+.toggle.sm button { font-size: 12px; padding: 6px 12px; }
+.cohortblock { margin-top: 34px; padding-top: 22px; border-top: 1px solid var(--line); }
+.cohorthead { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 6px; }
+.cohorthead h3 { margin: 0; font-size: 18px; font-weight: 800; }
+
+.instr { max-width: 880px; line-height: 1.65; }
+.instr h2 { font-size: 20px; margin: 8px 0 12px; }
+.instr h3 { font-size: 15px; margin: 24px 0 8px; }
+.instr p { color: var(--ink); margin: 8px 0; }
+.instr ul { margin: 8px 0; padding-left: 22px; }
+.instr li { margin: 5px 0; color: var(--ink); }
+.instr code { background: var(--chip); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+
+@media (prefers-color-scheme: dark) {
+  .grouprow td { background: #1a2036; }
+  table.wbr tbody tr:hover, table.exec tbody tr:hover { background: #161b27; }
+  :root { --zebra: #141824; }
 }
