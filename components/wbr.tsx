@@ -198,3 +198,120 @@ export function ExecSummary({ week, onMeta }: { week: string | null; onMeta?: (w
     </div>
   );
 }
+
+// ---------- Sample Outreach Funnel ----------
+type FunnelStage = { label: string; sub: string; value: number; pct: number | null };
+type FunnelData = { start: string; end: string; stages: FunnelStage[]; error?: string };
+
+export function Funnel({ brand, week }: { brand: string; week: string | null }) {
+  const [data, setData] = useState<FunnelData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    setLoading(true); setErr('');
+    const q = new URLSearchParams({ brand }); if (week) q.set('week', week);
+    fetch(`/api/wbr/funnel?${q}`).then(r => r.json()).then((d: FunnelData) => { d.error ? setErr(d.error) : setData(d); })
+      .catch(e => setErr(String(e))).finally(() => setLoading(false));
+  }, [brand, week]);
+
+  return (
+    <div className="cohortblock">
+      <div className="cohorthead">
+        <h3>Sample Outreach Funnel</h3>
+        {data && <span className="sub">{data.start} – {data.end} · vs previous 28 days</span>}
+      </div>
+      {loading && <div className="state">Loading…</div>}
+      {err && <div className="state err">Error: {err}</div>}
+      {!loading && !err && data && (
+        <div className="funnel">
+          {data.stages.map((s, i) => (
+            <div className="funnelrow" key={s.label} style={{ '--i': i } as React.CSSProperties}>
+              <div className="fbar" />
+              <div className="fmeta"><div className="fname">{s.label}</div><div className="fsub">{s.sub}</div></div>
+              <div className="fval">
+                {s.value.toLocaleString()}
+                {s.pct !== null && (
+                  <span className="fpct" style={{ color: deltaColor(s.pct) }}> {s.pct >= 0 ? '▲' : '▼'}{Math.abs(s.pct * 100).toFixed(0)}%</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Advertising by Product ----------
+type AdRow = {
+  product: string;
+  cost: number; costPct: number | null; revenue: number; revenuePct: number | null;
+  roi: number | null; roiPct: number | null; orders: number; ordersPct: number | null;
+  cpo: number | null; cpoPct: number | null; aov: number | null; aovPct: number | null;
+};
+type AdsData = { start: string; end: string; count: number; totals: { cost: number; revenue: number; orders: number }; rows: AdRow[]; error?: string };
+
+function adCell(v: number | null, fmt: Fmt, p: number | null, inverse?: boolean) {
+  return (
+    <td className="num">
+      <div className="strong">{fmtVal(v, fmt)}</div>
+      {p !== null && <div className="badge" style={{ color: deltaColor(p, inverse) }}>{p >= 0 ? '▲' : '▼'}{Math.abs(p * 100).toFixed(1)}%</div>}
+    </td>
+  );
+}
+
+export function AdsByProduct({ brand, week }: { brand: string; week: string | null }) {
+  const [data, setData] = useState<AdsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    setLoading(true); setErr('');
+    const q = new URLSearchParams({ brand }); if (week) q.set('week', week);
+    fetch(`/api/wbr/ads?${q}`).then(r => r.json()).then((d: AdsData) => { d.error ? setErr(d.error) : setData(d); })
+      .catch(e => setErr(String(e))).finally(() => setLoading(false));
+  }, [brand, week]);
+
+  return (
+    <div className="cohortblock">
+      <div className="cohorthead">
+        <h3>Advertising by Product <span className="pill">{data?.count ?? 0} products</span></h3>
+        {data && <span className="sub">GMV Max · {data.start} – {data.end} · vs previous 28 days</span>}
+      </div>
+      {loading && <div className="state">Loading…</div>}
+      {err && <div className="state err">Error: {err}</div>}
+      {!loading && !err && data && (
+        <div className="tablecard">
+          <table className="exec ads">
+            <thead>
+              <tr>
+                <th className="lead">Product</th><th>Cost</th><th>Revenue</th><th>ROI</th><th>Orders</th><th>Cost / Order</th><th>AOV</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.rows.map(r => (
+                <tr key={r.product}>
+                  <td className="lead metric">{r.product}</td>
+                  {adCell(r.cost, 'money', r.costPct, true)}
+                  {adCell(r.revenue, 'money', r.revenuePct)}
+                  {adCell(r.roi, 'x', r.roiPct)}
+                  {adCell(r.orders, 'int', r.ordersPct)}
+                  {adCell(r.cpo, 'money', r.cpoPct, true)}
+                  {adCell(r.aov, 'money', r.aovPct)}
+                </tr>
+              ))}
+              <tr className="totalrow">
+                <td className="lead metric">TOTAL ({data.count})</td>
+                {adCell(data.totals.cost, 'money', null, true)}
+                {adCell(data.totals.revenue, 'money', null)}
+                {adCell(data.totals.cost ? data.totals.revenue / data.totals.cost : null, 'x', null)}
+                {adCell(data.totals.orders, 'int', null)}
+                {adCell(data.totals.orders ? data.totals.cost / data.totals.orders : null, 'money', null, true)}
+                {adCell(data.totals.orders ? data.totals.revenue / data.totals.orders : null, 'money', null)}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

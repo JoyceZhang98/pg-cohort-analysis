@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MetricTree, ExecSummary } from '@/components/wbr';
+import { MetricTree, ExecSummary, Funnel, AdsByProduct } from '@/components/wbr';
 import { Cohort } from '@/components/cohort';
 import { Instructions } from '@/components/instructions';
 
@@ -95,6 +95,8 @@ export default function Page() {
             <EmvInputs />
           </div>
           <MetricTree brand={internalScope} week={week} emvV={emvV} emvE={emvE} onMeta={onMeta} />
+          <Funnel brand={internalScope} week={week} />
+          <AdsByProduct brand={internalScope} week={week} />
           <Cohort brand={internalScope === 'all' ? 'new-chapter' : internalScope} />
         </section>
       )}
