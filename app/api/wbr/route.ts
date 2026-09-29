@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
       : complete[complete.length - 1];
 
     const [lifetime, monthGoal] = await Promise.all([
-      fetchLifetimeCreators(shopIds, mondaysEndingAt(reportWeek, 13)),
+      fetchLifetimeCreators(shopIds, mondaysEndingAt(reportWeek, 13)).catch(() => ({} as Record<string, number>)),
       fetchMonthGoal(supaNames, reportWeek.slice(0, 7)),
     ]);
     const tree = buildTree(series, lifetime, reportWeek, emvV, emvE, monthGoal);

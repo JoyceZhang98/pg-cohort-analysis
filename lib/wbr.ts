@@ -81,10 +81,17 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
   // product_stat_daily is a compressed hypertable segmented by product_id, so filtering by an
   // explicit product-id list uses segment/index exclusion (fast). Joining on product.shop_id
   // instead forces a full decompress-scan of every shop (minutes). Fetch the ids up front.
-  const prodIds = (await pool.query<{ id: string }>(
-    `select id from product where shop_id = any($1)`, [s])).rows.map(r => r.id);
+  let prodIds: string[] = [];
+  try {
+    prodIds = (await pool.query<{ id: string }>(
+      `select id from product where shop_id = any($1)`, [s])).rows.map(r => r.id);
+  } catch (e) {
+    console.error('prodIds fetch failed (in-stock will be blank):', (e as Error).message);
+  }
 
-  const [prsd, ord, custNR, aff, adv, vid, vsd, ret, smp, smpAppr, smpSent, stock, active, tps, hero] = await Promise.all([
+  // Resilient: a single slow/timed-out query degrades to blank for its measures instead of
+  // failing the whole report (which would render "no numbers"). Uses allSettled, not all.
+  const settled = await Promise.allSettled([
     pool.query(
       `select to_char(date_trunc('week', psd.date),'YYYY-MM-DD') wk,
          sum(psd.gmv) gmv, sum(psd.video_gmv) video_gmv, sum(psd.live_gmv) live_gmv,
@@ -197,6 +204,9 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
        ) h on true
        group by 1`, [s]),
   ]);
+  settled.forEach((r, i) => { if (r.status === 'rejected') console.error(`wbr query #${i} failed:`, (r.reason as Error)?.message); });
+  const [prsd, ord, custNR, aff, adv, vid, vsd, ret, smp, smpAppr, smpSent, stock, active, tps, hero] =
+    settled.map(r => (r.status === 'fulfilled' ? r.value : { rows: [] }));
 
   const n = (x: unknown) => Number(x) || 0;
   for (const r of prsd.rows) bump(r.wk, m => { m.gmv += n(r.gmv); m.video_gmv += n(r.video_gmv); m.live_gmv += n(r.live_gmv); m.card_gmv += n(r.card_gmv); m.impressions += n(r.impressions); m.live_impr += n(r.live_impr); m.video_impr += n(r.video_impr); m.card_impr += n(r.card_impr); m.page_views += n(r.page_views); m.live_pv += n(r.live_pv); m.video_pv += n(r.video_pv); m.card_pv += n(r.card_pv); m.units += n(r.units); m.orders += n(r.orders); });
