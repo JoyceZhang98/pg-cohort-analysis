@@ -8,7 +8,7 @@ export type Fmt = 'money' | 'int' | 'pct' | 'x' | 'ratio';
 export const DEFINITIONS: Record<string, string> = {
   'GMV with Subsidies': 'Merchant GMV plus subsidies: GMV + TikTok Subsidy + Seller Subsidy.',
   'GMV': 'Gross merchandise value from product_stat_rich_daily (Video + Live + Product-Card GMV).',
-  'Subsidy Rate': 'Total subsidy ÷ GMV with Subsidies. Lower is better.',
+  'Subsidy Rate': 'TikTok Subsidy ÷ GMV with Subsidies — the platform-funded share of subsidized GMV. Lower is better.',
   'Affiliate GMV': 'GMV from affiliate orders, split by Open Plan / Target Plan / TAP.',
   '# of Hero Products': 'Products with ≥ $10,000 GMV AND ≥ 1,000 orders over the trailing 30 days.',
   'Halo Effect': 'External: incremental DTC / Amazon sales lift. Not sourced from TimescaleDB.',
@@ -24,20 +24,20 @@ export const DEFINITIONS: Record<string, string> = {
   '% of Videos from L3+': 'New L3+ videos ÷ all new videos.',
   'Avg Views per Affiliate Video': 'Total video views ÷ new affiliate videos.',
   'Ad Spend': 'GMV Max ad cost (gmv_max_campaign_stat_daily.cost).',
-  'Total Page Views': 'Product page views across Video, Shop-Tab, and LIVE.',
+  'Total Clicks': 'Product clicks (page views) across Video, Shop-Tab, and LIVE.',
   'Orders': 'Orders from product_stat_rich_daily.',
-  'CTR (PV / Impressions)': 'Page views ÷ impressions.',
-  'CTOR (Orders / PV)': 'Orders ÷ page views.',
+  'CTR (Clicks / Impressions)': 'Clicks ÷ impressions. Drill-down adds Add-to-Cart Rate (LIVE) = add-to-carts ÷ LIVE product impressions.',
+  'CTOR (Orders / Clicks)': 'Orders ÷ clicks. Drill-down adds Cart→Order Conversion (LIVE) = LIVE SKU orders ÷ add-to-carts.',
   'AOV (GMV / Orders)': 'GMV ÷ orders.',
   'Units per Order': 'Units sold ÷ orders.',
   'Refund Rate (% of GMV)': 'Refund GMV ÷ GMV. Lower is better.',
-  'Sales-Weighted In-Stock Rate': 'In-stock GMV ÷ total GMV for the same SKUs.',
+  'Unit-Weighted In-Stock Rate': 'Units sold on in-stock SKU-days ÷ total units sold (weights each SKU by its unit sales). Higher is better.',
   'Shop Health Score (SPS)': 'TikTok Shop Performance Score (from Supabase). Snapshot, not summed.',
   'Late Dispatch Rate': 'Orders dispatched after SLA ÷ total orders. Lower is better.',
   'Samples Applied': 'Sample requests created in the week.',
   'Samples Approved': 'Samples advanced to AWAITING_SHIPMENT.',
   'Samples Sent (Delivered)': 'Samples advanced to SHIPPED.',
-  'Target Plan Sends (creators invited)': 'Creators invited via targeted collaborations (target_collaboration_creator).',
+  'Target Plan Sends (not de-duped)': 'Total targeted-collaboration invites sent (target_collaboration_creator rows, not de-duped by creator).',
   'Email Outreach': 'External: email-outreach sends. Source pending.',
 };
 
@@ -172,7 +172,7 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
 
   return (
     <>
-      <DriverCheck drivers={data.tree.drivers} />
+      <DriverCheck drivers={data.tree.drivers} weeks={data.tree.weeks} />
       <div className="tablecard">
       <table className="wbr">
         <thead>
@@ -228,15 +228,17 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
   );
 }
 
-function DriverCheck({ drivers }: { drivers: { total: Driver | null; rows: Driver[]; biggest: number } }) {
+function DriverCheck({ drivers, weeks }: { drivers: { total: Driver | null; rows: Driver[]; biggest: number }; weeks: string[] }) {
   if (!drivers?.rows?.length) return null;
   const fmtDrv = (v: number | null, f: Fmt) => fmtVal(v, f);
+  const thisWk = weeks.length ? wkLabel(weeks[weeks.length - 1]) : 'This Week';
+  const lastWk = weeks.length > 1 ? wkLabel(weeks[weeks.length - 2]) : 'Last Week';
   return (
     <div className="drivercard">
       <div className="cohorthead"><h3>GMV Driver Check <Info text="GMV = Impressions × CTR × CTOR × AOV holds exactly. The biggest mover is picked by |Log Δ| (100·ln(this ÷ last)): log growth is symmetric between a rise and a fall, and the four drivers' Log Δs sum to GMV's own." /></h3><span className="sub">report week vs. prior week</span></div>
       <div className="tablecard">
         <table className="exec drv">
-          <thead><tr><th className="lead">Driver</th><th>This Week</th><th>Last Week</th><th>WoW Δ</th><th>WoW %</th><th>Log Δ (pts)</th></tr></thead>
+          <thead><tr><th className="lead">Driver</th><th>{thisWk}</th><th>{lastWk}</th><th>WoW Δ</th><th>WoW %</th><th>Log Δ (pts)</th></tr></thead>
           <tbody>
             {drivers.total && (
               <tr className="drvtotal">

@@ -41,10 +41,13 @@ export type Measures = {
   samples_approved: number;
   samples_delivered: number;
   target_plan_sends: number; // creators invited via targeted collaborations
+  cart_adds: number;   // LIVE add-to-cart events (product_live_stat_rich_daily.add_to_cart_count)
+  cart_impr: number;   // LIVE product impressions (denominator for add-to-cart rate)
+  cart_orders: number; // LIVE sku orders (numerator for cart→order conversion)
   skus_live: number;
   skus_oos: number;
-  instock_num: number; // sales-weighted in-stock numerator (in-stock GMV)
-  instock_den: number; // total GMV for the same SKUs
+  instock_num: number; // unit-weighted in-stock numerator (units sold on in-stock SKU-days)
+  instock_den: number; // total units sold for the same SKUs
   // ---- Supabase-sourced (best-effort; 0 when unavailable) ----
   sps: number;              // Shop Performance Score (brand-avg for the week)
   new_l3_videos: number;    // new videos by L3+ creators
@@ -60,6 +63,7 @@ const ZERO: Measures = {
   new_customers: 0, returning_customers: 0,
   late_orders: 0, order_rows: 0, hero_products: 0, refund_gmv: 0, new_videos: 0, active_creators: 0, likes: 0,
   comments: 0, shares: 0, samples_applied: 0, samples_approved: 0, samples_delivered: 0, target_plan_sends: 0,
+  cart_adds: 0, cart_impr: 0, cart_orders: 0,
   skus_live: 0, skus_oos: 0, instock_num: 0, instock_den: 0,
   sps: 0, new_l3_videos: 0, active_l3_creators: 0, l3_total_videos: 0,
 };
@@ -168,8 +172,8 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
       `select to_char(date_trunc('week', ps.date),'YYYY-MM-DD') wk,
          count(distinct ps.product_id) filter (where ps.has_inventory) skus_live,
          count(distinct ps.product_id) filter (where not ps.has_inventory) skus_oos,
-         sum(ps.total_revenue) filter (where ps.has_inventory) instock_num,
-         sum(ps.total_revenue) instock_den
+         sum(ps.units_sold_total) filter (where ps.has_inventory) instock_num,
+         sum(ps.units_sold_total) instock_den
        from product_stat_daily ps
        where ps.product_id = any($1) and ps.date >= ${since}
        group by 1`, [prodIds]),
@@ -203,9 +207,15 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
          having sum(pr.gmv) >= 10000 and sum(pr.orders) >= 1000
        ) h on true
        group by 1`, [s]),
+    pool.query(
+      `select to_char(date_trunc('week', ps.date),'YYYY-MM-DD') wk,
+         sum(ps.add_to_cart_count) atc, sum(ps.product_impressions) impr, sum(ps.sku_orders) sku_ord
+       from product_live_stat_rich_daily ps join product p on p.id = ps.product_id
+       where p.shop_id = any($1) and ps.date >= ${since}
+       group by 1`, [s]),
   ]);
   settled.forEach((r, i) => { if (r.status === 'rejected') console.error(`wbr query #${i} failed:`, (r.reason as Error)?.message); });
-  const [prsd, ord, custNR, aff, adv, vid, vsd, ret, smp, smpAppr, smpSent, stock, active, tps, hero] =
+  const [prsd, ord, custNR, aff, adv, vid, vsd, ret, smp, smpAppr, smpSent, stock, active, tps, hero, cart] =
     settled.map(r => (r.status === 'fulfilled' ? r.value : { rows: [] }));
 
   const n = (x: unknown) => Number(x) || 0;
@@ -224,6 +234,7 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
   for (const r of active.rows) bump(r.wk, m => { m.active_creators += n(r.active); });
   for (const r of tps.rows) bump(r.wk, m => { m.target_plan_sends += n(r.sends); });
   for (const r of hero.rows) bump(r.wk, m => { m.hero_products += n(r.hero); });
+  for (const r of cart.rows) bump(r.wk, m => { m.cart_adds += n(r.atc); m.cart_impr += n(r.impr); m.cart_orders += n(r.sku_ord); });
 
   // ---- Supabase over HTTPS REST (best-effort) — SPS + L3+ ----
   if (supaConfigured() && supaNames.length) {

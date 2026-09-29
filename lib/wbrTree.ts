@@ -43,7 +43,7 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
       { label: 'GMV with Subsidies', fmt: 'money', kind: 'flow', value: m => m.gmv + m.subsidy,
         children: [c('GMV', 'money', m => m.gmv), c('TikTok Subsidy', 'money', m => m.subsidy_tiktok), c('Seller Subsidy', 'money', m => m.subsidy_seller)] },
       { label: 'GMV', fmt: 'money', kind: 'flow', value: m => m.gmv,
-        children: [c('Video GMV %', 'pct', m => rate(m.video_gmv, m.gmv)), c('Live GMV %', 'pct', m => rate(m.live_gmv, m.gmv)), c('Product-Card GMV %', 'pct', m => rate(m.card_gmv, m.gmv))] },
+        children: [c('Video GMV %', 'pct', m => rate(m.video_gmv, m.gmv)), c('Product-Card GMV %', 'pct', m => rate(m.card_gmv, m.gmv)), c('Live GMV %', 'pct', m => rate(m.live_gmv, m.gmv))] },
       { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.subsidy_tiktok, m.gmv + m.subsidy) },
       { label: 'Affiliate GMV', fmt: 'money', kind: 'flow', value: m => m.affiliate_gmv,
         children: [
@@ -98,22 +98,27 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
       ext('Avg Views per L3+ Affiliate Video', 'int'),
       { label: 'Ad Spend', fmt: 'money', kind: 'flow', inverse: true, value: m => m.ad_spend,
         children: [xc('Videos in Learning', 'int'), xc('Videos in Delivery', 'int')] },
-      { label: 'Total Page Views', fmt: 'int', kind: 'flow', value: m => m.page_views,
-        children: [c('Video PV', 'int', m => m.video_pv), c('Shop-Tab PV', 'int', m => m.card_pv), c('LIVE PV', 'int', m => m.live_pv)] },
+      { label: 'Total Clicks', fmt: 'int', kind: 'flow', value: m => m.page_views,
+        children: [c('Video Clicks', 'int', m => m.video_pv), c('Shop-Tab Clicks', 'int', m => m.card_pv), c('LIVE Clicks', 'int', m => m.live_pv)] },
     ],
   },
   {
     group: 'CONVERSION — is the traffic converting?',
     items: [
       { label: 'Orders', fmt: 'int', kind: 'flow', value: m => m.orders },
-      { label: 'CTR (PV / Impressions)', fmt: 'pct', kind: 'rate', value: m => rate(m.page_views, m.impressions),
+      { label: 'CTR (Clicks / Impressions)', fmt: 'pct', kind: 'rate', value: m => rate(m.page_views, m.impressions),
         children: [
           c('Video CTR', 'pct', m => rate(m.video_pv, m.video_impr)),
           c('Shop-Tab CTR', 'pct', m => rate(m.card_pv, m.card_impr)),
           c('LIVE CTR', 'pct', m => rate(m.live_pv, m.live_impr)),
+          c('Add-to-Cart Rate (LIVE)', 'pct', m => rate(m.cart_adds, m.cart_impr)),
         ] },
-      { label: 'CTOR (Orders / PV)', fmt: 'pct', kind: 'rate', value: m => rate(m.orders, m.page_views),
-        children: [c('Orders', 'int', m => m.orders), c('Total Page Views', 'int', m => m.page_views)] },
+      { label: 'CTOR (Orders / Clicks)', fmt: 'pct', kind: 'rate', value: m => rate(m.orders, m.page_views),
+        children: [
+          c('Orders', 'int', m => m.orders),
+          c('Total Clicks', 'int', m => m.page_views),
+          c('Cart → Order Conversion (LIVE)', 'pct', m => rate(m.cart_orders, m.cart_adds)),
+        ] },
     ],
   },
   {
@@ -130,7 +135,7 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
   {
     group: 'AVAILABILITY — can we actually fulfil the demand?',
     items: [
-      { label: 'Sales-Weighted In-Stock Rate', fmt: 'pct', kind: 'rate', value: m => rate(m.instock_num, m.instock_den),
+      { label: 'Unit-Weighted In-Stock Rate', fmt: 'pct', kind: 'rate', value: m => rate(m.instock_num, m.instock_den),
         children: [
           c('In-Stock Rate (SKU count, unweighted)', 'pct', m => rate(m.skus_live, m.skus_live + m.skus_oos)),
           c('SKUs Live', 'int', m => m.skus_live),
@@ -144,11 +149,11 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
   {
     group: 'INTERNAL OPERATIONS VIEW — sample funnel',
     items: [
+      { label: 'Target Plan Sends (not de-duped)', fmt: 'int', kind: 'flow', value: m => m.target_plan_sends },
+      ext('Email Outreach', 'int'),
       { label: 'Samples Applied', fmt: 'int', kind: 'flow', value: m => m.samples_applied },
       { label: 'Samples Approved', fmt: 'int', kind: 'flow', value: m => m.samples_approved },
       { label: 'Samples Sent (Delivered)', fmt: 'int', kind: 'flow', value: m => m.samples_delivered },
-      { label: 'Target Plan Sends (creators invited)', fmt: 'int', kind: 'flow', value: m => m.target_plan_sends },
-      ext('Email Outreach', 'int'),
     ],
   },
 ];

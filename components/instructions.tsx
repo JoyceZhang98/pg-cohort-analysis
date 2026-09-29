@@ -29,15 +29,17 @@ const TREE: { group: string; rows: Def[] }[] = [
       ['New Affiliate Videos', 'video (by video_post_time)', 'count of videos posted in the period'],
       ['Avg Views per Affiliate Video', 'video_stat_rich_daily.views ÷ video count', 'Views ÷ New Videos'],
       ['Ad Spend', 'gmv_max_campaign_stat_daily.cost', 'Σ (GMV Max ad cost)'],
-      ['Total Page Views', 'product_stat_rich_daily.page_views', 'Σ (children: Video / Shop-Tab / LIVE) — placed just above Conversion'],
+      ['Total Clicks', 'product_stat_rich_daily.page_views', 'Σ product clicks / page views (children: Video / Shop-Tab / LIVE) — placed just above Conversion'],
     ],
   },
   {
     group: 'CONVERSION',
     rows: [
       ['Orders', 'product_stat_rich_daily.orders', 'Σ'],
-      ['CTR (PV / Impressions)', 'product_stat_rich_daily.page_views ÷ .impressions', 'Page Views ÷ Impressions'],
-      ['CTOR (Orders / PV)', 'product_stat_rich_daily.orders ÷ .page_views', 'Orders ÷ Page Views'],
+      ['CTR (Clicks / Impressions)', 'product_stat_rich_daily.page_views ÷ .impressions', 'Clicks ÷ Impressions'],
+      ['↳ Add-to-Cart Rate (LIVE)', 'product_live_stat_rich_daily.add_to_cart_count ÷ .product_impressions', 'LIVE add-to-carts ÷ LIVE product impressions (how much traffic enters the cart; LIVE-channel only)'],
+      ['CTOR (Orders / Clicks)', 'product_stat_rich_daily.orders ÷ .page_views', 'Orders ÷ Clicks'],
+      ['↳ Cart→Order Conversion (LIVE)', 'product_live_stat_rich_daily.sku_orders ÷ .add_to_cart_count', 'LIVE SKU orders ÷ add-to-carts (how many carts convert to orders; LIVE-channel only)'],
     ],
   },
   {
@@ -48,7 +50,7 @@ const TREE: { group: string; rows: Def[] }[] = [
       ['Units per Order', 'items_sold ÷ orders', 'Units ÷ Orders'],
       ['Refund GMV ⬇', 'return.refund_subtotal', 'Σ'],
       ['Refund Rate ⬇', 'return.refund_subtotal ÷ gmv', 'Refund GMV ÷ GMV'],
-      ['Sales-Weighted In-Stock Rate', 'product_stat_daily.total_revenue + has_inventory', 'Σ(revenue where in-stock) ÷ Σ(revenue)'],
+      ['Unit-Weighted In-Stock Rate', 'product_stat_daily.units_sold_total + has_inventory', 'Σ(units where in-stock) ÷ Σ(units) — weights each SKU by its unit sales'],
     ],
   },
   {
