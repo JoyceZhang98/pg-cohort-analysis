@@ -1,19 +1,22 @@
-import { Pool } from 'pg';
+// Supabase access over the REST API (HTTPS/443) — reachable from Vercel serverless,
+// unlike the DB pooler (IPv6/IPv4 issues). Best-effort: returns null if not configured.
+const URL_ = () => process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const KEY_ = () => process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-// Best-effort Supabase (Postgres) pool. Returns null if SUPABASE_DB_URL isn't set,
-// so the dashboard still works (Supabase-sourced metrics just show "—").
-declare global {
-  // eslint-disable-next-line no-var
-  var _supaPool: Pool | null | undefined;
+export function supaConfigured(): boolean {
+  return !!(URL_() && KEY_());
 }
 
-export function supaPool(): Pool | null {
-  if (global._supaPool !== undefined) return global._supaPool;
-  let url = process.env.SUPABASE_DB_URL;
-  // Serverless (Vercel) needs Supabase's Transaction pooler (port 6543), not Session (5432).
-  if (url && /pooler\.supabase\.com:5432/.test(url)) url = url.replace('pooler.supabase.com:5432', 'pooler.supabase.com:6543');
-  global._supaPool = url
-    ? new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, max: 3, keepAlive: true, connectionTimeoutMillis: 8000 })
-    : null;
-  return global._supaPool;
+// Call a Postgres function via PostgREST: POST /rest/v1/rpc/<fn>. Throws on HTTP error.
+export async function supaRpc<T = unknown>(fn: string, body: Record<string, unknown>): Promise<T> {
+  const url = URL_().replace(/\/$/, '');
+  const key = KEY_();
+  const res = await fetch(`${url}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(9000),
+  });
+  if (!res.ok) throw new Error(`rpc ${fn} ${res.status}: ${(await res.text()).slice(0, 160)}`);
+  return res.json() as Promise<T>;
 }
