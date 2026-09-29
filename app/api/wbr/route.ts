@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchWeekly, fetchLifetimeCreators } from '@/lib/wbr';
+import { fetchWeekly, fetchLifetimeCreators, fetchMonthGoal } from '@/lib/wbr';
 import { buildTree, mondaysEndingAt } from '@/lib/wbrTree';
 import { BRANDS, brandBySlug } from '@/lib/brands';
 
@@ -21,19 +21,22 @@ export async function GET(req: NextRequest) {
   const emvE = Number(p.get('emvE') ?? '0.3');
 
   let shopIds: string[];
+  let supaNames: string[];
   let label: string;
   if (brand === 'all') {
     shopIds = BRANDS.map(b => b.shopId);
+    supaNames = BRANDS.map(b => b.supaName);
     label = 'All P&G';
   } else {
     const b = brandBySlug(brand);
     if (!b) return NextResponse.json({ error: 'unknown brand' }, { status: 400 });
     shopIds = [b.shopId];
+    supaNames = [b.supaName];
     label = b.label;
   }
 
   try {
-    const series = await fetchWeekly(shopIds);
+    const series = await fetchWeekly(shopIds, supaNames);
     const currentMonday = mondayOf(new Date());
     const complete = [...series.keys()].filter(w => w < currentMonday).sort();
     if (complete.length === 0) return NextResponse.json({ error: 'no data' }, { status: 200 });
@@ -43,8 +46,11 @@ export async function GET(req: NextRequest) {
       ? p.get('week')!
       : complete[complete.length - 1];
 
-    const lifetime = await fetchLifetimeCreators(shopIds, mondaysEndingAt(reportWeek, 13));
-    const tree = buildTree(series, lifetime, reportWeek, emvV, emvE);
+    const [lifetime, monthGoal] = await Promise.all([
+      fetchLifetimeCreators(shopIds, mondaysEndingAt(reportWeek, 13)),
+      fetchMonthGoal(supaNames, reportWeek.slice(0, 7)),
+    ]);
+    const tree = buildTree(series, lifetime, reportWeek, emvV, emvE, monthGoal);
 
     return NextResponse.json({ brand: label, slug: brand, reportWeek, availableWeeks, tree, generatedAt: new Date().toISOString() });
   } catch (e) {

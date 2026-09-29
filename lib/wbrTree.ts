@@ -12,6 +12,8 @@ export type Row = {
   prior: number | null;   // prior-full-month absolute value
   momPct: number | null;
   external?: boolean;     // template metric with no TimescaleDB source (placeholder)
+  goal?: number | null;      // monthly goal (Supabase brand_gmv_goal)
+  goalAttain?: number | null; // MTD ÷ goal
   children?: Row[]; // raw components behind a ratio / composite (drill-down)
 };
 export type Group = { name: string; rows: Row[] };
@@ -89,9 +91,9 @@ const DEFS: { group: string; items: Def[] }[] = [
         children: [c('Shop-Tab PV', 'int', m => m.card_pv), c('LIVE PV', 'int', m => m.live_pv), c('Video PV', 'int', m => m.video_pv)] },
       { label: 'New Affiliate Videos', fmt: 'int', kind: 'flow', value: m => m.new_videos,
         children: [c('Active Creators (Creators Posting)', 'int', m => m.active_creators)] },
-      { label: 'New L3+ Affiliate Videos', fmt: 'int', kind: 'flow', value: () => null, external: true,
-        children: [xc('Active L3+ Creators', 'int')] },
-      ext('% of Videos from L3+', 'pct'),
+      { label: 'New L3+ Affiliate Videos', fmt: 'int', kind: 'flow', value: m => m.new_l3_videos,
+        children: [c('Active L3+ Creators', 'int', m => m.active_l3_creators)] },
+      { label: '% of Videos from L3+', fmt: 'pct', kind: 'rate', value: m => rate(m.new_l3_videos, m.l3_total_videos) },
       { label: 'Avg Views per Affiliate Video', fmt: 'int', kind: 'rate', value: m => rate(m.video_views, m.new_videos),
         children: [c('Video Views', 'int', m => m.video_views), c('New Affiliate Videos', 'int', m => m.new_videos)] },
       ext('Avg Views per L3+ Affiliate Video', 'int'),
@@ -133,7 +135,7 @@ const DEFS: { group: string; items: Def[] }[] = [
           c('SKUs Live', 'int', m => m.skus_live),
           c('SKUs Out of Stock', 'int', m => m.skus_oos),
         ] },
-      ext('Shop Health Score (SPS)', 'ratio'),
+      { label: 'Shop Health Score (SPS)', fmt: 'ratio', kind: 'snapshot', value: m => m.sps || null },
       { label: 'Late Dispatch Rate', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.late_orders, m.order_rows),
         children: [c('Late Orders', 'int', m => m.late_orders), c('Total Orders', 'int', m => m.order_rows)] },
     ],
@@ -159,7 +161,7 @@ const pctDelta = (a: number | null, b: number | null) => (a === null || b === nu
 
 export function buildTree(
   series: Map<string, Measures>, lifetimeByWeek: Record<string, number>,
-  reportWeek: string, emvV: number, emvE: number,
+  reportWeek: string, emvV: number, emvE: number, monthGoal = 0,
 ): Tree {
   const trailing = mondaysEndingAt(reportWeek, 5);
   const span = mondaysEndingAt(reportWeek, 13);
@@ -217,6 +219,7 @@ export function buildTree(
       const row = compute(def.value, def.kind, def.inverse, def.fmt);
       row.label = def.label;
       row.external = def.external;
+      if (def.label === 'GMV' && monthGoal > 0) { row.goal = monthGoal; row.goalAttain = row.mtd !== null ? row.mtd / monthGoal : null; }
       if (def.children) row.children = def.children.map(ch => { const r = compute(ch.value, 'flow', false, ch.fmt); r.label = ch.label; r.external = ch.external; return r; });
       return row;
     }),

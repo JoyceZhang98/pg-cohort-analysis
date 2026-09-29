@@ -58,6 +58,7 @@ export function Spark({ values, inverse }: { values: (number | null)[]; inverse?
 type Row = {
   label: string; fmt: Fmt; inverse?: boolean; external?: boolean;
   weekly: (number | null)[]; wowAbs: number | null; wowPct: number | null; mtd: number | null; prior: number | null; momPct: number | null;
+  goal?: number | null; goalAttain?: number | null;
   children?: Row[];
 };
 type Driver = { driver: string; fmt: Fmt; thisWeek: number | null; lastWeek: number | null; wowAbs: number | null; wowPct: number | null; logDelta: number | null };
@@ -99,7 +100,10 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
       <td className="num"><Spark values={r.weekly} inverse={r.inverse} /></td>
       <td className="num" style={{ color: deltaColor(r.wowAbs, r.inverse) }}>{fmtDelta(r.wowAbs, r.fmt)}</td>
       <td className="num" style={{ color: deltaColor(r.wowPct, r.inverse) }}>{r.wowPct === null ? '—' : (r.wowPct >= 0 ? '+' : '') + (r.wowPct * 100).toFixed(1) + '%'}</td>
-      <td className="num strong">{fmtVal(r.mtd, r.fmt)}</td>
+      <td className="num strong">
+        {fmtVal(r.mtd, r.fmt)}
+        {r.goal ? <div className="goalnote">Goal {fmtVal(r.goal, r.fmt)} · {r.goalAttain != null ? (r.goalAttain * 100).toFixed(1) : '—'}% attain</div> : null}
+      </td>
       <td className="num">{fmtVal(r.prior, r.fmt)}</td>
     </>
   );

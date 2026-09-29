@@ -13,7 +13,7 @@ function mondayOf(d: Date): string {
 }
 const rate = (n: number, d: number) => (d ? n / d : null);
 
-const METRICS: { key: string; label: string; fmt: 'money' | 'int' | 'pct' | 'x'; f: (m: Measures) => number | null }[] = [
+const METRICS: { key: string; label: string; fmt: 'money' | 'int' | 'pct' | 'x' | 'ratio'; f: (m: Measures) => number | null }[] = [
   { key: 'gmv', label: 'GMV', fmt: 'money', f: m => m.gmv },
   { key: 'views', label: 'Video Views', fmt: 'int', f: m => m.video_views },
   { key: 'ctr', label: 'CTR', fmt: 'pct', f: m => rate(m.page_views, m.impressions) },
@@ -21,12 +21,13 @@ const METRICS: { key: string; label: string; fmt: 'money' | 'int' | 'pct' | 'x';
   { key: 'aov', label: 'AOV', fmt: 'money', f: m => rate(m.gmv, m.orders) },
   { key: 'instock', label: 'In-Stock % (Sales-Wtd)', fmt: 'pct', f: m => rate(m.instock_num, m.instock_den) },
   { key: 'roas', label: 'Ads ROAS', fmt: 'x', f: m => rate(m.ad_gmv, m.ad_spend) },
+  { key: 'sps', label: 'Shop Health', fmt: 'ratio', f: m => m.sps || null },
 ];
 
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
   try {
-    const perBrand = await Promise.all(BRANDS.map(async b => ({ b, series: await fetchWeekly([b.shopId]) })));
+    const perBrand = await Promise.all(BRANDS.map(async b => ({ b, series: await fetchWeekly([b.shopId], [b.supaName]) })));
     const currentMonday = mondayOf(new Date());
     const allWeeks = new Set<string>();
     perBrand.forEach(x => x.series.forEach((_v, k) => { if (k < currentMonday) allWeeks.add(k); }));
@@ -59,6 +60,10 @@ export async function GET(req: NextRequest) {
       else (Object.keys(m) as (keyof Measures)[]).forEach(f => { acc[f] += m[f]; });
     }));
     const totalRow = { brand: 'TOTAL / WEIGHTED', cells: rowFor(totalSeries) };
+    // SPS shouldn't sum across brands — override the total with the brand average.
+    const spsVals = perBrand.map(x => x.series.get(reportWeek)?.sps).filter((v): v is number => !!v && v > 0);
+    const spsCell = totalRow.cells.find(c => c.key === 'sps');
+    if (spsCell) { spsCell.value = spsVals.length ? spsVals.reduce((a, b) => a + b, 0) / spsVals.length : null; spsCell.delta = null; }
 
     return NextResponse.json({
       reportWeek, availableWeeks: complete.slice(-10).reverse(),

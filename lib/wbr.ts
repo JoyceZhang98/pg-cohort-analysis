@@ -1,4 +1,5 @@
 import { pool } from './db';
+import { supaPool } from './supa';
 
 // ---------- Weekly metrics engine for the WBR ----------
 // Everything is bucketed into Monday-start weeks (Postgres date_trunc('week')).
@@ -38,6 +39,11 @@ export type Measures = {
   skus_oos: number;
   instock_num: number; // sales-weighted in-stock numerator (in-stock GMV)
   instock_den: number; // total GMV for the same SKUs
+  // ---- Supabase-sourced (best-effort; 0 when unavailable) ----
+  sps: number;              // Shop Performance Score (brand-avg for the week)
+  new_l3_videos: number;    // new videos by L3+ creators
+  active_l3_creators: number;
+  l3_total_videos: number;  // all new videos (denominator for % from L3+)
 };
 
 const ZERO: Measures = {
@@ -48,12 +54,14 @@ const ZERO: Measures = {
   late_orders: 0, order_rows: 0, refund_gmv: 0, new_videos: 0, active_creators: 0, likes: 0,
   comments: 0, shares: 0, samples_applied: 0, samples_approved: 0, samples_delivered: 0,
   skus_live: 0, skus_oos: 0, instock_num: 0, instock_den: 0,
+  sps: 0, new_l3_videos: 0, active_l3_creators: 0, l3_total_videos: 0,
 };
 
 const WEEKS_BACK = 16;
 
 // Returns weekly series keyed by 'YYYY-MM-DD' Monday, for the union of shopIds.
-export async function fetchWeekly(shopIds: string[]): Promise<Map<string, Measures>> {
+// supaNames = matching Supabase brand_name keys (for SPS + L3+ metrics; best-effort).
+export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): Promise<Map<string, Measures>> {
   const s = shopIds;
   const series = new Map<string, Measures>();
   const bump = (wk: string, f: (m: Measures) => void) => {
@@ -163,7 +171,47 @@ export async function fetchWeekly(shopIds: string[]): Promise<Map<string, Measur
   for (const r of stock.rows) bump(r.wk, m => { m.skus_live += n(r.skus_live); m.skus_oos += n(r.skus_oos); m.instock_num += n(r.instock_num); m.instock_den += n(r.instock_den); });
   for (const r of active.rows) bump(r.wk, m => { m.active_creators += n(r.active); });
 
+  // ---- Supabase (best-effort) — SPS + L3+ ----
+  const sp = supaPool();
+  if (sp && supaNames.length) {
+    try {
+      const [sps, l3] = await Promise.all([
+        sp.query(
+          `select to_char(date_trunc('week', report_date),'YYYY-MM-DD') wk, avg(sps_score::numeric) sps
+           from sps_daily_snapshot where brand_name = any($1) and report_date >= now() - interval '${WEEKS_BACK} weeks'
+           group by 1`, [supaNames]),
+        sp.query(
+          `select to_char(date_trunc('week', post_time),'YYYY-MM-DD') wk,
+             count(*) filter (where creator_level in ('L3','L4','L5','L6+')) new_l3,
+             count(distinct creator_handle) filter (where creator_level in ('L3','L4','L5','L6+')) active_l3,
+             count(*) total
+           from daily_newvideo_creatorlevel
+           where brand_name = any($1) and post_time >= now() - interval '${WEEKS_BACK} weeks'
+           group by 1`, [supaNames]),
+      ]);
+      for (const r of sps.rows) bump(r.wk, m => { m.sps = n(r.sps); });
+      for (const r of l3.rows) bump(r.wk, m => { m.new_l3_videos += n(r.new_l3); m.active_l3_creators += n(r.active_l3); m.l3_total_videos += n(r.total); });
+    } catch (e) {
+      console.error('Supabase fetch failed (SPS/L3+ will be blank):', (e as Error).message);
+    }
+  }
+
   return series;
+}
+
+// Report-month GMV goal from Supabase brand_gmv_goal (best-effort; 0 if none/unavailable).
+export async function fetchMonthGoal(supaNames: string[], reportMonth: string): Promise<number> {
+  const sp = supaPool();
+  if (!sp || !supaNames.length) return 0;
+  try {
+    const { rows } = await sp.query<{ goal: string }>(
+      `select coalesce(sum(goal_gmv),0) goal from brand_gmv_goal
+       where brand_name = any($1) and to_char(date_trunc('month', period_start),'YYYY-MM') = $2`,
+      [supaNames, reportMonth]);
+    return Number(rows[0]?.goal) || 0;
+  } catch {
+    return 0;
+  }
 }
 
 // Lifetime creators (cumulative distinct posting affiliates) at each week-end.
