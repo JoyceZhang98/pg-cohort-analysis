@@ -32,21 +32,20 @@ const c = (label: string, fmt: Fmt, value: ValFn): Child => ({ label, fmt, value
 
 const DEFS: { group: string; items: Def[] }[] = [
   {
-    group: 'HEADLINE',
+    group: 'GMV',
     items: [
       { label: 'GMV with Subsidies', fmt: 'money', kind: 'flow', value: m => m.gmv + m.subsidy,
         children: [c('GMV', 'money', m => m.gmv), c('Subsidy $', 'money', m => m.subsidy)] },
       { label: 'GMV', fmt: 'money', kind: 'flow', value: m => m.gmv,
         children: [c('Video GMV', 'money', m => m.video_gmv), c('Live GMV', 'money', m => m.live_gmv), c('Product-Card GMV', 'money', m => m.card_gmv)] },
       { label: 'Affiliate GMV', fmt: 'money', kind: 'flow', value: m => m.affiliate_gmv },
-      { label: 'Ads Take Rate (Ad GMV / Total GMV)', fmt: 'pct', kind: 'rate', value: m => rate(m.ad_gmv, m.gmv),
-        children: [c('Ad GMV', 'money', m => m.ad_gmv), c('Total GMV', 'money', m => m.gmv)] },
       { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.subsidy, m.gmv + m.subsidy),
         children: [c('Subsidy $', 'money', m => m.subsidy), c('GMV with Subsidies', 'money', m => m.gmv + m.subsidy)] },
-      { label: 'GPM (GMV per 1,000 views)', fmt: 'money', kind: 'rate', value: m => (m.video_views ? (m.gmv / m.video_views) * 1000 : null),
-        children: [c('GMV', 'money', m => m.gmv), c('Video Views', 'int', m => m.video_views)] },
-      { label: 'Ads ROAS (Ads GMV / Ad Spend)', fmt: 'x', kind: 'rate', value: m => rate(m.ad_gmv, m.ad_spend),
-        children: [c('Ad GMV', 'money', m => m.ad_gmv), c('Ad Spend', 'money', m => m.ad_spend)] },
+    ],
+  },
+  {
+    group: 'MEDIA & CONTENT VALUE',
+    items: [
       { label: 'EMV (Earned Media Value)', fmt: 'money', kind: 'flow', value: (m, ev, ee) => (m.video_views / 1000) * ev + (m.likes + m.comments + m.shares) * ee,
         children: [
           c('Video Views', 'int', m => m.video_views),
@@ -54,6 +53,17 @@ const DEFS: { group: string; items: Def[] }[] = [
           c('Views $ component', 'money', (m, ev) => (m.video_views / 1000) * ev),
           c('Engagement $ component', 'money', (m, _ev, ee) => (m.likes + m.comments + m.shares) * ee),
         ] },
+      { label: 'GPM (GMV per 1,000 views)', fmt: 'money', kind: 'rate', value: m => (m.video_views ? (m.gmv / m.video_views) * 1000 : null),
+        children: [c('GMV', 'money', m => m.gmv), c('Video Views', 'int', m => m.video_views)] },
+      { label: 'Ads Take Rate (Ad Spend / Ad GMV)', fmt: 'pct', kind: 'rate', value: m => rate(m.ad_spend, m.ad_gmv),
+        children: [c('Ad Spend', 'money', m => m.ad_spend), c('Ad GMV', 'money', m => m.ad_gmv)] },
+      { label: 'Ads ROAS (Ads GMV / Ad Spend)', fmt: 'x', kind: 'rate', value: m => rate(m.ad_gmv, m.ad_spend),
+        children: [c('Ad GMV', 'money', m => m.ad_gmv), c('Ad Spend', 'money', m => m.ad_spend)] },
+    ],
+  },
+  {
+    group: 'CREATORS & CUSTOMERS',
+    items: [
       { label: 'Active Creators (Creators Posting)', fmt: 'int', kind: 'flow', value: m => m.active_creators },
       { label: 'Lifetime Creators', fmt: 'int', kind: 'snapshot', value: (_m, _v, _e, lifetime) => lifetime },
       { label: 'Total Customers', fmt: 'int', kind: 'flow', value: m => m.customers },
@@ -93,13 +103,13 @@ const DEFS: { group: string; items: Def[] }[] = [
       { label: 'Refund GMV', fmt: 'money', kind: 'flow', inverse: true, value: m => m.refund_gmv },
       { label: 'Refund Rate (% of GMV)', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.refund_gmv, m.gmv),
         children: [c('Refund GMV', 'money', m => m.refund_gmv), c('GMV', 'money', m => m.gmv)] },
-      { label: 'Sales-Weighted In-Stock Rate', fmt: 'pct', kind: 'rate', value: m => rate(m.instock_num, m.instock_den),
-        children: [c('In-Stock GMV', 'money', m => m.instock_num), c('Total GMV (rated SKUs)', 'money', m => m.instock_den)] },
     ],
   },
   {
     group: 'AVAILABILITY — can we actually fulfil the demand?',
     items: [
+      { label: 'Sales-Weighted In-Stock Rate', fmt: 'pct', kind: 'rate', value: m => rate(m.instock_num, m.instock_den),
+        children: [c('In-Stock GMV', 'money', m => m.instock_num), c('Total GMV (rated SKUs)', 'money', m => m.instock_den)] },
       { label: 'Late Dispatch Rate', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.late_orders, m.order_rows),
         children: [c('Late Orders', 'int', m => m.late_orders), c('Total Orders', 'int', m => m.order_rows)] },
       { label: 'SKUs Live', fmt: 'int', kind: 'snapshot', value: m => m.skus_live },

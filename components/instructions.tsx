@@ -9,7 +9,7 @@ const TREE: { group: string; rows: Def[] }[] = [
       ['GMV', 'product_stat_rich_daily.gmv', 'Σ gmv (all products of the shop)'],
       ['GMV with Subsidies', 'product_stat_rich_daily.gmv + line_item.platform_discount, seller_discount', 'GMV + Subsidy$'],
       ['Affiliate GMV', 'affiliate_order.price_amount, quantity', 'Σ price_amount × quantity'],
-      ['Ads Take Rate', 'gmv_max_campaign_stat_daily.gross_revenue ÷ product_stat_rich_daily.gmv', 'Ad GMV ÷ GMV'],
+      ['Ads Take Rate', 'gmv_max_campaign_stat_daily.cost ÷ .gross_revenue', 'Ad Spend ÷ Ad GMV (= 1 / ROAS)'],
       ['Subsidy Rate ⬇', 'line_item.platform_discount + seller_discount', 'Subsidy$ ÷ (GMV + Subsidy$)'],
       ['GPM', 'product_stat_rich_daily.gmv ÷ video_stat_rich_daily.views', 'GMV ÷ Views × 1,000'],
       ['Ads ROAS', 'gmv_max_campaign_stat_daily.gross_revenue ÷ .cost', 'Ad GMV ÷ Ad Spend'],
