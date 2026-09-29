@@ -7,10 +7,11 @@ const TREE: { group: string; rows: Def[] }[] = [
     group: 'HEADLINE',
     rows: [
       ['GMV', 'product_stat_rich_daily.gmv', 'Σ gmv (all products of the shop)'],
-      ['GMV with Subsidies', 'product_stat_rich_daily.gmv + line_item.platform_discount, seller_discount', 'GMV + Subsidy$'],
+      ['GMV with Subsidies', 'product_stat_rich_daily.gmv + line_item.platform_discount, seller_discount', 'GMV + TikTok Subsidy + Seller Subsidy'],
+      ['TikTok Subsidy / Seller Subsidy', 'line_item.platform_discount / .seller_discount', 'platform-funded vs seller-funded discount, split'],
       ['Affiliate GMV', 'affiliate_order.price_amount, quantity', 'Σ price_amount × quantity'],
-      ['Ads Take Rate', 'gmv_max_campaign_stat_daily.cost ÷ .gross_revenue', 'Ad Spend ÷ Ad GMV (= 1 / ROAS)'],
       ['Subsidy Rate ⬇', 'line_item.platform_discount + seller_discount', 'Subsidy$ ÷ (GMV + Subsidy$)'],
+      ['# of Hero Products', 'product_stat_rich_daily.gmv, orders (trailing 30d, per product)', 'count of products with ≥ $10,000 GMV AND ≥ 1,000 orders over the last 30 days (snapshot)'],
       ['GPM', 'product_stat_rich_daily.gmv ÷ video_stat_rich_daily.views', 'GMV ÷ Views × 1,000'],
       ['Ads ROAS', 'gmv_max_campaign_stat_daily.gross_revenue ÷ .cost', 'Ad GMV ÷ Ad Spend'],
       ['EMV', 'video_stat_rich_daily.views, likes, comments, shares', 'Views/1k × $rateV + (Likes+Comments+Shares) × $rateE — engagements priced per individual (default $10 /1k views, $0.30 /engagement, both editable)'],
@@ -20,13 +21,14 @@ const TREE: { group: string; rows: Def[] }[] = [
     ],
   },
   {
-    group: 'AWARENESS',
+    group: 'AWARENESS (channel children ordered Video → Shop-Tab → LIVE)',
     rows: [
-      ['Impressions', 'product_stat_rich_daily.impressions', 'Σ'],
+      ['Impressions', 'product_stat_rich_daily.impressions', 'Σ (children: Video / Shop-Tab / LIVE)'],
       ['Video Views', 'video_stat_rich_daily.views', 'Σ'],
-      ['Total Page Views', 'product_stat_rich_daily.page_views', 'Σ'],
       ['New Affiliate Videos', 'video (by video_post_time)', 'count of videos posted in the period'],
       ['Avg Views per Affiliate Video', 'video_stat_rich_daily.views ÷ video count', 'Views ÷ New Videos'],
+      ['Ad Spend', 'gmv_max_campaign_stat_daily.cost', 'Σ (GMV Max ad cost)'],
+      ['Total Page Views', 'product_stat_rich_daily.page_views', 'Σ (children: Video / Shop-Tab / LIVE) — placed just above Conversion'],
     ],
   },
   {
@@ -35,7 +37,6 @@ const TREE: { group: string; rows: Def[] }[] = [
       ['Orders', 'product_stat_rich_daily.orders', 'Σ'],
       ['CTR (PV / Impressions)', 'product_stat_rich_daily.page_views ÷ .impressions', 'Page Views ÷ Impressions'],
       ['CTOR (Orders / PV)', 'product_stat_rich_daily.orders ÷ .page_views', 'Orders ÷ Page Views'],
-      ['Orders per 1,000 Views', 'product_stat_rich_daily.orders ÷ video_stat_rich_daily.views', 'Orders ÷ Views × 1,000'],
     ],
   },
   {
@@ -63,6 +64,8 @@ const TREE: { group: string; rows: Def[] }[] = [
       ['Samples Applied', 'sample.created_at', 'count of samples created in the period'],
       ['Samples Approved', "sample_activity.new_status = 'AWAITING_SHIPMENT'", 'distinct samples reaching that status'],
       ['Samples Sent (Delivered)', "sample_activity.new_status = 'SHIPPED'", 'distinct samples reaching that status'],
+      ['Target Plan Sends', 'target_collaboration_creator ⋈ target_collaboration.shop_id', 'creators invited via targeted collaborations in the period'],
+      ['Email Outreach', '— (external, source pending)', 'placeholder — email-outreach sends not yet wired'],
     ],
   },
 ];
@@ -127,7 +130,7 @@ export function Instructions() {
       </ul>
 
       <h3>Brand Dashboard — metric tree</h3>
-      <p className="dnote">Per brand. The Executive Summary uses the same definitions for its 7 headline metrics (GMV, Video Views, CTR, CTOR, AOV, In-Stock %, Ads ROAS).</p>
+      <p className="dnote">Per brand. The Executive Summary uses the same definitions for its headline metrics (GMV, Video Views, CTR, CTOR, AOV, In-Stock %, Ads ROAS, Shop Health).</p>
       {TREE.map(g => (<div key={g.group}><h4>{g.group}</h4><DictTable rows={g.rows} /></div>))}
 
       <h3>Internal Dashboard — Sample Outreach Funnel</h3>
@@ -144,9 +147,12 @@ export function Instructions() {
       <h3>Notes &amp; deliberate choices</h3>
       <ul>
         <li><b>Order universe:</b> GMV / Orders / Units / Impressions / Page Views come from TikTok&rsquo;s product analytics (<code>product_stat_rich_daily</code>), which counts a smaller order universe than the raw <code>order</code> table — chosen so GMV / AOV / CTOR stay internally consistent. Total Customers and Late Dispatch necessarily come from the raw <code>order</code> table.</li>
-        <li><b>Subsidy</b> = platform + seller discounts from <code>line_item</code>.</li>
-        <li><b>Ad source</b> = <code>gmv_max_campaign_stat_daily</code> (GMV Max). <code>advertiser_stat_daily</code> is not used (its revenue is null / coverage patchy).</li>
-        <li><b>Dropped from the original template</b> (not fully backed by TimescaleDB): Month Goal / % Attainment, all L3+ rows, Seller-Tier benchmarks, Halo Effect, # Hero Products, Shop Health (SPS), and per-product ad Impressions / Clicks.</li>
+        <li><b>Subsidy</b> = platform (TikTok-funded) + seller (seller-funded) discounts from <code>line_item</code>, now split into <b>TikTok Subsidy</b> and <b>Seller Subsidy</b>.</li>
+        <li><b>Ad source</b> = <code>gmv_max_campaign_stat_daily</code> (GMV Max). <code>advertiser_stat_daily</code> is not used (its revenue is null / coverage patchy). Ad Spend lives under <b>Awareness</b>.</li>
+        <li><b>Partial weeks:</b> a week column only appears once all 7 of its days have fully elapsed — in-progress or short weeks are hidden.</li>
+        <li><b>Metric definitions</b> now appear on hover (the small <b>?</b> next to each metric name), not as inline text. EMV rate inputs ($/1,000 views, $/engagement) also carry hover definitions.</li>
+        <li><b>Now sourced (via Supabase):</b> Monthly GMV Goal / % attainment, L3+ creator &amp; video rows, and Shop Health (SPS). <b># of Hero Products</b> is computed from TimescaleDB (≥ $10k GMV &amp; ≥ 1,000 orders, trailing 30d).</li>
+        <li><b>Still external / placeholder</b> (no source yet): Halo Effect, Email Outreach, Videos in Learning / Delivery (the warehouse has no ad learning-vs-delivery phase — only ENABLE/DISABLE).</li>
       </ul>
     </div>
   );

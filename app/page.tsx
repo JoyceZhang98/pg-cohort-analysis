@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MetricTree, ExecSummary, Funnel, AdsByProduct } from '@/components/wbr';
+import { MetricTree, ExecSummary, Funnel, AdsByProduct, Info } from '@/components/wbr';
 import { Cohort } from '@/components/cohort';
 import { Instructions } from '@/components/instructions';
 
@@ -45,9 +45,9 @@ export default function Page() {
   );
   const EmvInputs = () => (
     <>
-      <label className="ctl"><span>EMV $/1,000 VIEWS</span>
+      <label className="ctl"><span>EMV $/1,000 VIEWS <Info text="Price per 1,000 video views, CPM-style. Views component of EMV = (Video Views ÷ 1,000) × this rate." /></span>
         <input type="number" step="0.1" value={emvV} onChange={e => setEmvV(Number(e.target.value) || 0)} /></label>
-      <label className="ctl"><span>EMV $ / ENGAGEMENT</span>
+      <label className="ctl"><span>EMV $ / ENGAGEMENT <Info text="Price per individual engagement (each like, comment, or share) — not per 1,000, since each is its own unit of value. Engagement component of EMV = (Likes+Comments+Shares) × this rate." /></span>
         <input type="number" step="0.05" value={emvE} onChange={e => setEmvE(Number(e.target.value) || 0)} /></label>
     </>
   );
@@ -83,13 +83,6 @@ export default function Page() {
             </label>
             <WeekPicker />
             <EmvInputs />
-          </div>
-          <div className="notebox">
-            <b>EMV (Earned Media Value)</b> = (Video Views ÷ 1,000) × $/1,000-views + (Likes+Comments+Shares) × $/engagement.
-            Views price CPM-style, per 1,000; engagements price per individual like/comment/share, <b>not per 1,000</b>,
-            since each is its own unit of value. Adjust either rate above to see EMV recompute live. Rows with a
-            {' '}<span className="twist" style={{ marginRight: 0 }}>▸</span>{' '}toggle next to their name are numerator/denominator
-            ratios — click the toggle to expand the raw components behind the percentage.
           </div>
           <MetricTree brand={brand} week={week} emvV={emvV} emvE={emvE} onMeta={onMeta} />
         </section>

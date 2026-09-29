@@ -17,6 +17,8 @@ export type Measures = {
   ad_spend: number;
   ad_gmv: number;
   subsidy: number;
+  subsidy_tiktok: number;  // platform_discount (TikTok-funded)
+  subsidy_seller: number;  // seller_discount (seller-funded)
   impressions: number;
   live_impr: number; video_impr: number; card_impr: number;   // impressions by channel
   page_views: number;
@@ -28,6 +30,7 @@ export type Measures = {
   new_customers: number; returning_customers: number;
   late_orders: number;
   order_rows: number; // denominator for late-dispatch (order-table orders)
+  hero_products: number; // products with >=$10k GMV & >=1000 orders over trailing 30d (snapshot)
   refund_gmv: number;
   new_videos: number;
   active_creators: number;
@@ -37,6 +40,7 @@ export type Measures = {
   samples_applied: number;
   samples_approved: number;
   samples_delivered: number;
+  target_plan_sends: number; // creators invited via targeted collaborations
   skus_live: number;
   skus_oos: number;
   instock_num: number; // sales-weighted in-stock numerator (in-stock GMV)
@@ -51,11 +55,11 @@ export type Measures = {
 const ZERO: Measures = {
   gmv: 0, video_gmv: 0, live_gmv: 0, card_gmv: 0, affiliate_gmv: 0, ad_spend: 0, ad_gmv: 0,
   aff_gmv_open: 0, aff_gmv_target: 0, aff_gmv_tap: 0,
-  subsidy: 0, impressions: 0, live_impr: 0, video_impr: 0, card_impr: 0, video_views: 0,
+  subsidy: 0, subsidy_tiktok: 0, subsidy_seller: 0, impressions: 0, live_impr: 0, video_impr: 0, card_impr: 0, video_views: 0,
   page_views: 0, live_pv: 0, video_pv: 0, card_pv: 0, units: 0, orders: 0, customers: 0,
   new_customers: 0, returning_customers: 0,
-  late_orders: 0, order_rows: 0, refund_gmv: 0, new_videos: 0, active_creators: 0, likes: 0,
-  comments: 0, shares: 0, samples_applied: 0, samples_approved: 0, samples_delivered: 0,
+  late_orders: 0, order_rows: 0, hero_products: 0, refund_gmv: 0, new_videos: 0, active_creators: 0, likes: 0,
+  comments: 0, shares: 0, samples_applied: 0, samples_approved: 0, samples_delivered: 0, target_plan_sends: 0,
   skus_live: 0, skus_oos: 0, instock_num: 0, instock_den: 0,
   sps: 0, new_l3_videos: 0, active_l3_creators: 0, l3_total_videos: 0,
 };
@@ -74,7 +78,13 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
   };
   const since = `current_date - interval '${WEEKS_BACK} weeks'`;
 
-  const [prsd, ord, custNR, aff, adv, vid, vsd, ret, smp, smpAppr, smpSent, stock, active] = await Promise.all([
+  // product_stat_daily is a compressed hypertable segmented by product_id, so filtering by an
+  // explicit product-id list uses segment/index exclusion (fast). Joining on product.shop_id
+  // instead forces a full decompress-scan of every shop (minutes). Fetch the ids up front.
+  const prodIds = (await pool.query<{ id: string }>(
+    `select id from product where shop_id = any($1)`, [s])).rows.map(r => r.id);
+
+  const [prsd, ord, custNR, aff, adv, vid, vsd, ret, smp, smpAppr, smpSent, stock, active, tps, hero] = await Promise.all([
     pool.query(
       `select to_char(date_trunc('week', psd.date),'YYYY-MM-DD') wk,
          sum(psd.gmv) gmv, sum(psd.video_gmv) video_gmv, sum(psd.live_gmv) live_gmv,
@@ -91,7 +101,8 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
       `select to_char(date_trunc('week', o.create_time),'YYYY-MM-DD') wk,
          count(distinct o.user_id) customers, count(distinct o.id) order_rows,
          count(distinct o.id) filter (where o.rts_time is not null and o.rts_sla_time is not null and o.rts_time > o.rts_sla_time) late,
-         coalesce(sum((nullif(li.platform_discount,''))::numeric + (nullif(li.seller_discount,''))::numeric),0) subsidy
+         coalesce(sum((nullif(li.platform_discount,''))::numeric),0) subsidy_tiktok,
+         coalesce(sum((nullif(li.seller_discount,''))::numeric),0) subsidy_seller
        from "order" o left join line_item li on li.order_id = o.id
        where o.shop_id = any($1) and o.create_time >= ${since}
        group by 1`, [s]),
@@ -152,19 +163,44 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
          count(distinct ps.product_id) filter (where not ps.has_inventory) skus_oos,
          sum(ps.total_revenue) filter (where ps.has_inventory) instock_num,
          sum(ps.total_revenue) instock_den
-       from product_stat_daily ps join product p on p.id = ps.product_id
-       where p.shop_id = any($1) and ps.date >= ${since}
-       group by 1`, [s]),
+       from product_stat_daily ps
+       where ps.product_id = any($1) and ps.date >= ${since}
+       group by 1`, [prodIds]),
     pool.query(
       `select to_char(date_trunc('week', v.video_post_time),'YYYY-MM-DD') wk,
          count(distinct v.affiliate_id) active
        from video v where v.shop_id = any($1) and v.affiliate_id is not null and v.video_post_time >= ${since}
        group by 1`, [s]),
+    pool.query(
+      `select to_char(date_trunc('week', tcc.created_at),'YYYY-MM-DD') wk, count(*) sends
+       from target_collaboration_creator tcc join target_collaboration tc on tc.id = tcc.target_collaboration_id
+       where tc.shop_id = any($1) and tcc.created_at >= ${since}
+       group by 1`, [s]),
+    pool.query(
+      `with wk as (
+         select generate_series(date_trunc('week', current_date) - interval '${WEEKS_BACK} weeks',
+                                 date_trunc('week', current_date) - interval '1 week', interval '1 week')::date monday
+       ),
+       prod as (
+         select psd.product_id, psd.date, psd.gmv, psd.orders
+         from product_stat_rich_daily psd join product p on p.id = psd.product_id
+         where p.shop_id = any($1) and psd.date >= (select min(monday) from wk) - interval '30 days'
+       )
+       select to_char(w.monday,'YYYY-MM-DD') wk, count(*) hero
+       from wk w
+       left join lateral (
+         select pr.product_id from prod pr
+         where pr.date > (w.monday + interval '6 days') - interval '30 days'
+           and pr.date <= w.monday + interval '6 days'
+         group by pr.product_id
+         having sum(pr.gmv) >= 10000 and sum(pr.orders) >= 1000
+       ) h on true
+       group by 1`, [s]),
   ]);
 
   const n = (x: unknown) => Number(x) || 0;
   for (const r of prsd.rows) bump(r.wk, m => { m.gmv += n(r.gmv); m.video_gmv += n(r.video_gmv); m.live_gmv += n(r.live_gmv); m.card_gmv += n(r.card_gmv); m.impressions += n(r.impressions); m.live_impr += n(r.live_impr); m.video_impr += n(r.video_impr); m.card_impr += n(r.card_impr); m.page_views += n(r.page_views); m.live_pv += n(r.live_pv); m.video_pv += n(r.video_pv); m.card_pv += n(r.card_pv); m.units += n(r.units); m.orders += n(r.orders); });
-  for (const r of ord.rows) bump(r.wk, m => { m.customers += n(r.customers); m.order_rows += n(r.order_rows); m.late_orders += n(r.late); m.subsidy += n(r.subsidy); });
+  for (const r of ord.rows) bump(r.wk, m => { m.customers += n(r.customers); m.order_rows += n(r.order_rows); m.late_orders += n(r.late); m.subsidy_tiktok += n(r.subsidy_tiktok); m.subsidy_seller += n(r.subsidy_seller); m.subsidy += n(r.subsidy_tiktok) + n(r.subsidy_seller); });
   for (const r of custNR.rows) bump(r.wk, m => { m.new_customers += n(r.new_cust); m.returning_customers += n(r.returning_cust); });
   for (const r of aff.rows) bump(r.wk, m => { m.affiliate_gmv += n(r.aff_gmv); m.aff_gmv_open += n(r.aff_open); m.aff_gmv_target += n(r.aff_target); m.aff_gmv_tap += n(r.aff_tap); });
   for (const r of adv.rows) bump(r.wk, m => { m.ad_spend += n(r.ad_spend); m.ad_gmv += n(r.ad_gmv); });
@@ -176,6 +212,8 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
   for (const r of smpSent.rows) bump(r.wk, m => { m.samples_delivered += n(r.sent); });
   for (const r of stock.rows) bump(r.wk, m => { m.skus_live += n(r.skus_live); m.skus_oos += n(r.skus_oos); m.instock_num += n(r.instock_num); m.instock_den += n(r.instock_den); });
   for (const r of active.rows) bump(r.wk, m => { m.active_creators += n(r.active); });
+  for (const r of tps.rows) bump(r.wk, m => { m.target_plan_sends += n(r.sends); });
+  for (const r of hero.rows) bump(r.wk, m => { m.hero_products += n(r.hero); });
 
   // ---- Supabase over HTTPS REST (best-effort) — SPS + L3+ ----
   if (supaConfigured() && supaNames.length) {

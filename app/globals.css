@@ -187,3 +187,25 @@ tr.extrow td.lead.metric { font-weight: 500; }
 
 /* ---------- goal annotation under MTD ---------- */
 .goalnote { font-size: 10px; font-weight: 600; color: var(--muted); margin-top: 2px; white-space: nowrap; }
+
+/* GMV summary row + "driven by" separator in the Driver Check */
+table.drv tr.drvtotal td { background: #eef4ff; border-top: 2px solid #c9d8f2; font-size: 14px; }
+table.drv tr.drvsep td { padding: 4px 12px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: #6b7280; text-transform: uppercase; background: transparent; border: none; }
+@media (prefers-color-scheme: dark) {
+  table.drv tr.drvtotal td { background: #10203a; border-top-color: #24427a; }
+  table.drv tr.drvsep td { color: #9aa4b2; }
+}
+
+/* Hover "?" for metric definitions (replaces inline explainer paragraphs) */
+.infomark {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; margin-left: 6px; border-radius: 50%;
+  font-size: 10px; font-weight: 700; line-height: 1; cursor: help;
+  color: #6b7280; background: #e6eaf0; border: 1px solid #d3d9e2;
+  vertical-align: middle; user-select: none;
+}
+.infomark:hover, .infomark:focus { color: #1f4e9c; background: #dbe6fb; border-color: #b9cdf0; outline: none; }
+@media (prefers-color-scheme: dark) {
+  .infomark { color: #9aa4b2; background: #1c2733; border-color: #2b3947; }
+  .infomark:hover, .infomark:focus { color: #cfe0ff; background: #223655; border-color: #33507e; }
+}

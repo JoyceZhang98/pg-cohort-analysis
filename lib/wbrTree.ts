@@ -21,7 +21,7 @@ export type Driver = { driver: string; fmt: Fmt; thisWeek: number | null; lastWe
 export type Tree = {
   weeks: string[]; groups: Group[]; reportWeek: string;
   months: { mtd: string; prior: string };
-  drivers: { rows: Driver[]; biggest: number };
+  drivers: { total: Driver | null; rows: Driver[]; biggest: number };
 };
 
 type Kind = 'flow' | 'rate' | 'snapshot';
@@ -41,18 +41,18 @@ const DEFS: { group: string; items: Def[] }[] = [
     group: 'GMV',
     items: [
       { label: 'GMV with Subsidies', fmt: 'money', kind: 'flow', value: m => m.gmv + m.subsidy,
-        children: [c('GMV', 'money', m => m.gmv), c('Subsidy $', 'money', m => m.subsidy)] },
+        children: [c('GMV', 'money', m => m.gmv), c('TikTok Subsidy', 'money', m => m.subsidy_tiktok), c('Seller Subsidy', 'money', m => m.subsidy_seller)] },
       { label: 'GMV', fmt: 'money', kind: 'flow', value: m => m.gmv,
         children: [c('Video GMV', 'money', m => m.video_gmv), c('Live GMV', 'money', m => m.live_gmv), c('Product-Card GMV', 'money', m => m.card_gmv)] },
+      { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.subsidy, m.gmv + m.subsidy),
+        children: [c('TikTok Subsidy', 'money', m => m.subsidy_tiktok), c('Seller Subsidy', 'money', m => m.subsidy_seller), c('GMV with Subsidies', 'money', m => m.gmv + m.subsidy)] },
       { label: 'Affiliate GMV', fmt: 'money', kind: 'flow', value: m => m.affiliate_gmv,
         children: [
           c('Open Plan %', 'pct', m => rate(m.aff_gmv_open, m.affiliate_gmv)),
           c('Target Plan %', 'pct', m => rate(m.aff_gmv_target, m.affiliate_gmv)),
           c('TAP %', 'pct', m => rate(m.aff_gmv_tap, m.affiliate_gmv)),
         ] },
-      { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.subsidy, m.gmv + m.subsidy),
-        children: [c('Subsidy $', 'money', m => m.subsidy), c('GMV with Subsidies', 'money', m => m.gmv + m.subsidy)] },
-      ext('# of Hero Products', 'int'),
+      { label: '# of Hero Products', fmt: 'int', kind: 'snapshot', value: m => m.hero_products },
       { label: 'Halo Effect', fmt: 'money', kind: 'flow', value: () => null, external: true,
         children: [xc('Sales Lift to DTC', 'money'), xc('Sales Lift to Amazon', 'money')] },
     ],
@@ -69,8 +69,6 @@ const DEFS: { group: string; items: Def[] }[] = [
         ] },
       { label: 'GPM (GMV per 1,000 views)', fmt: 'money', kind: 'rate', value: m => (m.video_views ? (m.gmv / m.video_views) * 1000 : null),
         children: [c('GMV', 'money', m => m.gmv), c('Video Views', 'int', m => m.video_views)] },
-      { label: 'Ads Take Rate (Ad Spend / Ad GMV)', fmt: 'pct', kind: 'rate', value: m => rate(m.ad_spend, m.ad_gmv),
-        children: [c('Ad Spend', 'money', m => m.ad_spend), c('Ad GMV', 'money', m => m.ad_gmv)] },
       { label: 'Ads ROAS (Ads GMV / Ad Spend)', fmt: 'x', kind: 'rate', value: m => rate(m.ad_gmv, m.ad_spend),
         children: [c('Ad GMV', 'money', m => m.ad_gmv), c('Ad Spend', 'money', m => m.ad_spend)] },
     ],
@@ -88,11 +86,9 @@ const DEFS: { group: string; items: Def[] }[] = [
     group: 'AWARENESS — are we getting enough exposure?',
     items: [
       { label: 'Impressions', fmt: 'int', kind: 'flow', value: m => m.impressions,
-        children: [c('Shop-Tab Impressions', 'int', m => m.card_impr), c('LIVE Impressions', 'int', m => m.live_impr), c('Video Impressions', 'int', m => m.video_impr)] },
+        children: [c('Video Impressions', 'int', m => m.video_impr), c('Shop-Tab Impressions', 'int', m => m.card_impr), c('LIVE Impressions', 'int', m => m.live_impr)] },
       { label: 'Video Views', fmt: 'int', kind: 'flow', value: m => m.video_views,
         children: [xc('L3+ Affiliate Video Views', 'int')] },
-      { label: 'Total Page Views', fmt: 'int', kind: 'flow', value: m => m.page_views,
-        children: [c('Shop-Tab PV', 'int', m => m.card_pv), c('LIVE PV', 'int', m => m.live_pv), c('Video PV', 'int', m => m.video_pv)] },
       { label: 'New Affiliate Videos', fmt: 'int', kind: 'flow', value: m => m.new_videos,
         children: [c('Active Creators (Creators Posting)', 'int', m => m.active_creators)] },
       { label: 'New L3+ Affiliate Videos', fmt: 'int', kind: 'flow', value: m => m.new_l3_videos,
@@ -101,6 +97,10 @@ const DEFS: { group: string; items: Def[] }[] = [
       { label: 'Avg Views per Affiliate Video', fmt: 'int', kind: 'rate', value: m => rate(m.video_views, m.new_videos),
         children: [c('Video Views', 'int', m => m.video_views), c('New Affiliate Videos', 'int', m => m.new_videos)] },
       ext('Avg Views per L3+ Affiliate Video', 'int'),
+      { label: 'Ad Spend', fmt: 'money', kind: 'flow', inverse: true, value: m => m.ad_spend,
+        children: [xc('Videos in Learning', 'int'), xc('Videos in Delivery', 'int')] },
+      { label: 'Total Page Views', fmt: 'int', kind: 'flow', value: m => m.page_views,
+        children: [c('Video PV', 'int', m => m.video_pv), c('Shop-Tab PV', 'int', m => m.card_pv), c('LIVE PV', 'int', m => m.live_pv)] },
     ],
   },
   {
@@ -115,8 +115,6 @@ const DEFS: { group: string; items: Def[] }[] = [
         ] },
       { label: 'CTOR (Orders / PV)', fmt: 'pct', kind: 'rate', value: m => rate(m.orders, m.page_views),
         children: [c('Orders', 'int', m => m.orders), c('Total Page Views', 'int', m => m.page_views)] },
-      { label: 'Orders per 1,000 Views', fmt: 'ratio', kind: 'rate', value: m => (m.video_views ? (m.orders / m.video_views) * 1000 : null),
-        children: [c('Orders', 'int', m => m.orders), c('Video Views', 'int', m => m.video_views)] },
     ],
   },
   {
@@ -150,6 +148,8 @@ const DEFS: { group: string; items: Def[] }[] = [
       { label: 'Samples Applied', fmt: 'int', kind: 'flow', value: m => m.samples_applied },
       { label: 'Samples Approved', fmt: 'int', kind: 'flow', value: m => m.samples_approved },
       { label: 'Samples Sent (Delivered)', fmt: 'int', kind: 'flow', value: m => m.samples_delivered },
+      { label: 'Target Plan Sends (creators invited)', fmt: 'int', kind: 'flow', value: m => m.target_plan_sends },
+      ext('Email Outreach', 'int'),
     ],
   },
 ];
@@ -167,7 +167,10 @@ export function buildTree(
   series: Map<string, Measures>, lifetimeByWeek: Record<string, number>,
   reportWeek: string, emvV: number, emvE: number, monthGoal = 0,
 ): Tree {
-  const trailing = mondaysEndingAt(reportWeek, 5);
+  // Only show a week column once all 7 of its days have fully elapsed (no partial weeks).
+  const todayMs = Date.now();
+  const weekComplete = (monday: string) => new Date(monday + 'T00:00:00Z').getTime() + 7 * 864e5 <= todayMs;
+  const trailing = mondaysEndingAt(reportWeek, 5).filter(weekComplete);
   const span = mondaysEndingAt(reportWeek, 13);
   const repMonth = monthOf(reportWeek);
   const priorMonth = monthOf(mondaysEndingAt(reportWeek, 6)[0]);
@@ -214,6 +217,15 @@ export function buildTree(
   let biggest = -1, biggestMag = -1;
   driverRows.forEach((r, i) => { if (r.logDelta !== null && Math.abs(r.logDelta) > biggestMag) { biggestMag = Math.abs(r.logDelta); biggest = i; } });
 
+  // GMV summary row shown atop the driver table ("driven by ↓")
+  const gT = reportWk ? reportWk.gmv : null;
+  const gL = prevWk ? prevWk.gmv : null;
+  const gmvTotal: Driver = {
+    driver: 'GMV', fmt: 'money', thisWeek: gT, lastWeek: gL,
+    wowAbs: gT !== null && gL !== null ? gT - gL : null, wowPct: pctDelta(gT, gL),
+    logDelta: gT !== null && gL !== null && gT > 0 && gL > 0 ? 100 * Math.log(gT / gL) : null,
+  };
+
   const shortMonth = (mondayKey: string) => new Date(mondayKey + 'T00:00:00Z').toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
   const months = { mtd: shortMonth(reportWeek), prior: shortMonth(priorWeeks[0] ?? mondaysEndingAt(reportWeek, 6)[0]) };
 
@@ -229,5 +241,5 @@ export function buildTree(
     }),
   }));
 
-  return { weeks: trailing, groups, reportWeek, months, drivers: { rows: driverRows, biggest } };
+  return { weeks: trailing, groups, reportWeek, months, drivers: { total: gmvTotal, rows: driverRows, biggest } };
 }

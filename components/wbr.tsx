@@ -4,6 +4,47 @@ import { Fragment, useEffect, useState } from 'react';
 
 export type Fmt = 'money' | 'int' | 'pct' | 'x' | 'ratio';
 
+// Hover-only metric definitions (replaces the inline explainer paragraphs).
+export const DEFINITIONS: Record<string, string> = {
+  'GMV with Subsidies': 'Merchant GMV plus subsidies: GMV + TikTok Subsidy + Seller Subsidy.',
+  'GMV': 'Gross merchandise value from product_stat_rich_daily (Video + Live + Product-Card GMV).',
+  'Subsidy Rate': 'Total subsidy ÷ GMV with Subsidies. Lower is better.',
+  'Affiliate GMV': 'GMV from affiliate orders, split by Open Plan / Target Plan / TAP.',
+  '# of Hero Products': 'Products with ≥ $10,000 GMV AND ≥ 1,000 orders over the trailing 30 days.',
+  'Halo Effect': 'External: incremental DTC / Amazon sales lift. Not sourced from TimescaleDB.',
+  'EMV (Earned Media Value)': '(Video Views ÷ 1,000) × $/1,000-views + (Likes+Comments+Shares) × $/engagement.',
+  'GPM (GMV per 1,000 views)': 'GMV ÷ Video Views × 1,000.',
+  'Ads ROAS (Ads GMV / Ad Spend)': 'GMV Max gross revenue ÷ ad cost.',
+  'Lifetime Creators': 'Cumulative distinct affiliates who have ever posted a video for the shop, as of week-end.',
+  'Total Customers': 'Distinct buyers in the week — new (first-ever order this week) vs returning.',
+  'Impressions': 'Total impressions across Video, Shop-Tab, and LIVE.',
+  'Video Views': 'Total affiliate video views in the week.',
+  'New Affiliate Videos': 'Videos posted by affiliates in the week; Active Creators = distinct posters.',
+  'New L3+ Affiliate Videos': 'New videos from L3+ (higher-tier) creators.',
+  '% of Videos from L3+': 'New L3+ videos ÷ all new videos.',
+  'Avg Views per Affiliate Video': 'Total video views ÷ new affiliate videos.',
+  'Ad Spend': 'GMV Max ad cost (gmv_max_campaign_stat_daily.cost).',
+  'Total Page Views': 'Product page views across Video, Shop-Tab, and LIVE.',
+  'Orders': 'Orders from product_stat_rich_daily.',
+  'CTR (PV / Impressions)': 'Page views ÷ impressions.',
+  'CTOR (Orders / PV)': 'Orders ÷ page views.',
+  'AOV (GMV / Orders)': 'GMV ÷ orders.',
+  'Units per Order': 'Units sold ÷ orders.',
+  'Refund Rate (% of GMV)': 'Refund GMV ÷ GMV. Lower is better.',
+  'Sales-Weighted In-Stock Rate': 'In-stock GMV ÷ total GMV for the same SKUs.',
+  'Shop Health Score (SPS)': 'TikTok Shop Performance Score (from Supabase). Snapshot, not summed.',
+  'Late Dispatch Rate': 'Orders dispatched after SLA ÷ total orders. Lower is better.',
+  'Samples Applied': 'Sample requests created in the week.',
+  'Samples Approved': 'Samples advanced to AWAITING_SHIPMENT.',
+  'Samples Sent (Delivered)': 'Samples advanced to SHIPPED.',
+  'Target Plan Sends (creators invited)': 'Creators invited via targeted collaborations (target_collaboration_creator).',
+  'Email Outreach': 'External: email-outreach sends. Source pending.',
+};
+
+export function Info({ text }: { text: string }) {
+  return <span className="infomark" tabIndex={0} title={text} aria-label={text}>?</span>;
+}
+
 export function fmtVal(v: number | null, fmt: Fmt): string {
   if (v === null || v === undefined || Number.isNaN(v)) return '—';
   switch (fmt) {
@@ -62,10 +103,19 @@ type Row = {
   children?: Row[];
 };
 type Driver = { driver: string; fmt: Fmt; thisWeek: number | null; lastWeek: number | null; wowAbs: number | null; wowPct: number | null; logDelta: number | null };
-type Tree = { weeks: string[]; groups: { name: string; rows: Row[] }[]; reportWeek: string; months: { mtd: string; prior: string }; drivers: { rows: Driver[]; biggest: number } };
+type Tree = { weeks: string[]; groups: { name: string; rows: Row[] }[]; reportWeek: string; months: { mtd: string; prior: string }; drivers: { total: Driver | null; rows: Driver[]; biggest: number } };
 type WbrData = { brand: string; reportWeek: string; availableWeeks: string[]; tree: Tree; error?: string };
 
-const wkLabel = (k: string) => { const [, m, d] = k.split('-'); return `${m}/${d}`; };
+// Monday key → compact week range, e.g. "Aug 24–30" or cross-month "Aug 31–Sep 6".
+const wkLabel = (k: string) => {
+  const start = new Date(k + 'T00:00:00Z');
+  const end = new Date(start.getTime() + 6 * 864e5);
+  const mo = (d: Date) => d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+  const sM = mo(start), eM = mo(end);
+  return sM === eM
+    ? `${sM} ${start.getUTCDate()}–${end.getUTCDate()}`
+    : `${sM} ${start.getUTCDate()}–${eM} ${end.getUTCDate()}`;
+};
 
 export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
   brand: string; emvV: number; emvE: number; week: string | null;
@@ -116,7 +166,7 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
         <thead>
           <tr>
             <th className="lead" rowSpan={2}>Metric</th>
-            <th colSpan={data.tree.weeks.length}>TRAILING 5 WEEKS</th>
+            <th colSpan={data.tree.weeks.length}>TRAILING {data.tree.weeks.length} WEEKS (full weeks only)</th>
             <th rowSpan={2}>Trend</th>
             <th colSpan={2}>WEEK OVER WEEK</th>
             <th colSpan={2}>MONTH TO DATE</th>
@@ -140,6 +190,7 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
                       <td className="lead metric">
                         {hasKids ? <span className="twist">{isOpen ? '▾' : '▸'}</span> : <span className="twist sp" />}
                         {r.label}
+                        {DEFINITIONS[r.label] && <Info text={DEFINITIONS[r.label]} />}
                         {r.external && <span className="exttag" title="No TimescaleDB source — external data pending">external</span>}
                       </td>
                       {cellsFor(r)}
@@ -162,16 +213,27 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
   );
 }
 
-function DriverCheck({ drivers }: { drivers: { rows: Driver[]; biggest: number } }) {
+function DriverCheck({ drivers }: { drivers: { total: Driver | null; rows: Driver[]; biggest: number } }) {
   if (!drivers?.rows?.length) return null;
   const fmtDrv = (v: number | null, f: Fmt) => fmtVal(v, f);
   return (
     <div className="drivercard">
-      <div className="cohorthead"><h3>GMV Driver Check</h3><span className="sub">GMV = Impressions × CTR × CTOR × AOV · this week vs. last week</span></div>
+      <div className="cohorthead"><h3>GMV Driver Check <Info text="GMV = Impressions × CTR × CTOR × AOV holds exactly. The biggest mover is picked by |Log Δ| (100·ln(this ÷ last)): log growth is symmetric between a rise and a fall, and the four drivers' Log Δs sum to GMV's own." /></h3><span className="sub">report week vs. prior week</span></div>
       <div className="tablecard">
         <table className="exec drv">
           <thead><tr><th className="lead">Driver</th><th>This Week</th><th>Last Week</th><th>WoW Δ</th><th>WoW %</th><th>Log Δ (pts)</th></tr></thead>
           <tbody>
+            {drivers.total && (
+              <tr className="drvtotal">
+                <td className="lead metric strong">{drivers.total.driver}</td>
+                <td className="num strong">{fmtDrv(drivers.total.thisWeek, drivers.total.fmt)}</td>
+                <td className="num">{fmtDrv(drivers.total.lastWeek, drivers.total.fmt)}</td>
+                <td className="num" style={{ color: deltaColor(drivers.total.wowAbs) }}>{fmtDelta(drivers.total.wowAbs, drivers.total.fmt)}</td>
+                <td className="num" style={{ color: deltaColor(drivers.total.wowPct) }}>{drivers.total.wowPct === null ? '—' : (drivers.total.wowPct >= 0 ? '+' : '') + (drivers.total.wowPct * 100).toFixed(1) + '%'}</td>
+                <td className="num" style={{ color: deltaColor(drivers.total.logDelta) }}>{drivers.total.logDelta === null ? '—' : (drivers.total.logDelta >= 0 ? '+' : '') + drivers.total.logDelta.toFixed(1) + ' pts'}</td>
+              </tr>
+            )}
+            <tr className="drvsep"><td className="lead" colSpan={6}>driven by ↓</td></tr>
             {drivers.rows.map((d, i) => (
               <tr key={d.driver} className={i === drivers.biggest ? 'biggest' : ''}>
                 <td className="lead metric">{d.driver}{i === drivers.biggest && <span className="mover"> ◆ biggest mover</span>}</td>
@@ -185,7 +247,6 @@ function DriverCheck({ drivers }: { drivers: { rows: Driver[]; biggest: number }
           </tbody>
         </table>
       </div>
-      <p className="hint">GMV = Impressions × CTR × CTOR × AOV holds exactly. The <b>biggest mover</b> is picked by |Log Δ| (100·ln(this ÷ last)) — log growth is symmetric between a rise and a fall and the four drivers&rsquo; Log Δs sum to GMV&rsquo;s own, so it&rsquo;s more rigorous than raw WoW %.</p>
     </div>
   );
 }
