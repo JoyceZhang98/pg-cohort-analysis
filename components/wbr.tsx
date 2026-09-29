@@ -141,8 +141,8 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
                       {cellsFor(r)}
                     </tr>
                     {hasKids && isOpen && r.children!.map(ch => (
-                      <tr key={r.label + '/' + ch.label} className="childrow">
-                        <td className="lead metric child">{ch.label}</td>
+                      <tr key={r.label + '/' + ch.label} className={`childrow${ch.external ? ' extrow' : ''}`}>
+                        <td className="lead metric child">{ch.label}{ch.external && <span className="exttag" title="No TimescaleDB source — external data pending">external</span>}</td>
                         {cellsFor(ch)}
                       </tr>
                     ))}

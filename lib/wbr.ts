@@ -15,11 +15,14 @@ export type Measures = {
   ad_gmv: number;
   subsidy: number;
   impressions: number;
-  video_views: number;
+  live_impr: number; video_impr: number; card_impr: number;   // impressions by channel
   page_views: number;
+  live_pv: number; video_pv: number; card_pv: number;         // page views by channel
+  video_views: number;
   units: number;
   orders: number;
   customers: number;
+  new_customers: number; returning_customers: number;
   late_orders: number;
   order_rows: number; // denominator for late-dispatch (order-table orders)
   refund_gmv: number;
@@ -39,7 +42,9 @@ export type Measures = {
 
 const ZERO: Measures = {
   gmv: 0, video_gmv: 0, live_gmv: 0, card_gmv: 0, affiliate_gmv: 0, ad_spend: 0, ad_gmv: 0,
-  subsidy: 0, impressions: 0, video_views: 0, page_views: 0, units: 0, orders: 0, customers: 0,
+  subsidy: 0, impressions: 0, live_impr: 0, video_impr: 0, card_impr: 0, video_views: 0,
+  page_views: 0, live_pv: 0, video_pv: 0, card_pv: 0, units: 0, orders: 0, customers: 0,
+  new_customers: 0, returning_customers: 0,
   late_orders: 0, order_rows: 0, refund_gmv: 0, new_videos: 0, active_creators: 0, likes: 0,
   comments: 0, shares: 0, samples_applied: 0, samples_approved: 0, samples_delivered: 0,
   skus_live: 0, skus_oos: 0, instock_num: 0, instock_den: 0,
@@ -58,12 +63,16 @@ export async function fetchWeekly(shopIds: string[]): Promise<Map<string, Measur
   };
   const since = `current_date - interval '${WEEKS_BACK} weeks'`;
 
-  const [prsd, ord, aff, adv, vid, vsd, ret, smp, smpAppr, smpSent, stock, active] = await Promise.all([
+  const [prsd, ord, custNR, aff, adv, vid, vsd, ret, smp, smpAppr, smpSent, stock, active] = await Promise.all([
     pool.query(
       `select to_char(date_trunc('week', psd.date),'YYYY-MM-DD') wk,
          sum(psd.gmv) gmv, sum(psd.video_gmv) video_gmv, sum(psd.live_gmv) live_gmv,
-         sum(psd.product_card_gmv) card_gmv, sum(psd.impressions) impressions,
-         sum(psd.page_views) page_views, sum(psd.items_sold) units, sum(psd.orders) orders
+         sum(psd.product_card_gmv) card_gmv,
+         sum(psd.impressions) impressions, sum(psd.live_impressions) live_impr,
+         sum(psd.video_impressions) video_impr, sum(psd.product_card_impressions) card_impr,
+         sum(psd.page_views) page_views, sum(psd.live_page_views) live_pv,
+         sum(psd.video_page_views) video_pv, sum(psd.product_card_page_views) card_pv,
+         sum(psd.items_sold) units, sum(psd.orders) orders
        from product_stat_rich_daily psd join product p on p.id = psd.product_id
        where p.shop_id = any($1) and psd.date >= ${since}
        group by 1`, [s]),
@@ -73,6 +82,14 @@ export async function fetchWeekly(shopIds: string[]): Promise<Map<string, Measur
          count(distinct o.id) filter (where o.rts_time is not null and o.rts_sla_time is not null and o.rts_time > o.rts_sla_time) late,
          coalesce(sum((nullif(li.platform_discount,''))::numeric + (nullif(li.seller_discount,''))::numeric),0) subsidy
        from "order" o left join line_item li on li.order_id = o.id
+       where o.shop_id = any($1) and o.create_time >= ${since}
+       group by 1`, [s]),
+    pool.query(
+      `with firsts as (select user_id, min(create_time) f from "order" where shop_id = any($1) group by 1)
+       select to_char(date_trunc('week', o.create_time),'YYYY-MM-DD') wk,
+         count(distinct o.user_id) filter (where f.f >= date_trunc('week', o.create_time)) new_cust,
+         count(distinct o.user_id) filter (where f.f <  date_trunc('week', o.create_time)) returning_cust
+       from "order" o join firsts f on f.user_id = o.user_id
        where o.shop_id = any($1) and o.create_time >= ${since}
        group by 1`, [s]),
     pool.query(
@@ -132,8 +149,9 @@ export async function fetchWeekly(shopIds: string[]): Promise<Map<string, Measur
   ]);
 
   const n = (x: unknown) => Number(x) || 0;
-  for (const r of prsd.rows) bump(r.wk, m => { m.gmv += n(r.gmv); m.video_gmv += n(r.video_gmv); m.live_gmv += n(r.live_gmv); m.card_gmv += n(r.card_gmv); m.impressions += n(r.impressions); m.page_views += n(r.page_views); m.units += n(r.units); m.orders += n(r.orders); });
+  for (const r of prsd.rows) bump(r.wk, m => { m.gmv += n(r.gmv); m.video_gmv += n(r.video_gmv); m.live_gmv += n(r.live_gmv); m.card_gmv += n(r.card_gmv); m.impressions += n(r.impressions); m.live_impr += n(r.live_impr); m.video_impr += n(r.video_impr); m.card_impr += n(r.card_impr); m.page_views += n(r.page_views); m.live_pv += n(r.live_pv); m.video_pv += n(r.video_pv); m.card_pv += n(r.card_pv); m.units += n(r.units); m.orders += n(r.orders); });
   for (const r of ord.rows) bump(r.wk, m => { m.customers += n(r.customers); m.order_rows += n(r.order_rows); m.late_orders += n(r.late); m.subsidy += n(r.subsidy); });
+  for (const r of custNR.rows) bump(r.wk, m => { m.new_customers += n(r.new_cust); m.returning_customers += n(r.returning_cust); });
   for (const r of aff.rows) bump(r.wk, m => { m.affiliate_gmv += n(r.aff_gmv); });
   for (const r of adv.rows) bump(r.wk, m => { m.ad_spend += n(r.ad_spend); m.ad_gmv += n(r.ad_gmv); });
   for (const r of vid.rows) bump(r.wk, m => { m.new_videos += n(r.new_videos); });

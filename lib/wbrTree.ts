@@ -24,14 +24,15 @@ export type Tree = {
 
 type Kind = 'flow' | 'rate' | 'snapshot';
 type ValFn = (m: Measures, emvV: number, emvE: number, lifetime: number) => number | null;
-type Child = { label: string; fmt: Fmt; value: ValFn };
+type Child = { label: string; fmt: Fmt; value: ValFn; external?: boolean };
 type Def = { label: string; fmt: Fmt; kind: Kind; inverse?: boolean; value: ValFn; children?: Child[]; external?: boolean };
 
 const rate = (num: number, den: number) => (den ? num / den : null);
 // component shorthands (all flows)
 const c = (label: string, fmt: Fmt, value: ValFn): Child => ({ label, fmt, value });
-// external = template metric with no TimescaleDB source → placeholder row (all cells blank)
+// external = template metric with no TimescaleDB source → placeholder (all cells blank)
 const ext = (label: string, fmt: Fmt): Def => ({ label, fmt, kind: 'flow', value: () => null, external: true });
+const xc = (label: string, fmt: Fmt): Child => ({ label, fmt, value: () => null, external: true });
 
 const DEFS: { group: string; items: Def[] }[] = [
   {
@@ -41,11 +42,13 @@ const DEFS: { group: string; items: Def[] }[] = [
         children: [c('GMV', 'money', m => m.gmv), c('Subsidy $', 'money', m => m.subsidy)] },
       { label: 'GMV', fmt: 'money', kind: 'flow', value: m => m.gmv,
         children: [c('Video GMV', 'money', m => m.video_gmv), c('Live GMV', 'money', m => m.live_gmv), c('Product-Card GMV', 'money', m => m.card_gmv)] },
-      { label: 'Affiliate GMV', fmt: 'money', kind: 'flow', value: m => m.affiliate_gmv },
+      { label: 'Affiliate GMV', fmt: 'money', kind: 'flow', value: m => m.affiliate_gmv,
+        children: [xc('Open Plan %', 'pct'), xc('Target Plan %', 'pct'), xc('TAP %', 'pct')] },
       { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.subsidy, m.gmv + m.subsidy),
         children: [c('Subsidy $', 'money', m => m.subsidy), c('GMV with Subsidies', 'money', m => m.gmv + m.subsidy)] },
       ext('# of Hero Products', 'int'),
-      ext('Halo Effect', 'money'),
+      { label: 'Halo Effect', fmt: 'money', kind: 'flow', value: () => null, external: true,
+        children: [xc('Sales Lift to DTC', 'money'), xc('Sales Lift to Amazon', 'money')] },
     ],
   },
   {
@@ -69,19 +72,25 @@ const DEFS: { group: string; items: Def[] }[] = [
   {
     group: 'CREATORS & CUSTOMERS',
     items: [
-      { label: 'Active Creators (Creators Posting)', fmt: 'int', kind: 'flow', value: m => m.active_creators },
-      { label: 'Lifetime Creators', fmt: 'int', kind: 'snapshot', value: (_m, _v, _e, lifetime) => lifetime },
-      { label: 'Total Customers', fmt: 'int', kind: 'flow', value: m => m.customers },
+      { label: 'Lifetime Creators', fmt: 'int', kind: 'snapshot', value: (_m, _v, _e, lifetime) => lifetime,
+        children: [xc('Lifetime L3+ Creators', 'int')] },
+      { label: 'Total Customers', fmt: 'int', kind: 'flow', value: m => m.customers,
+        children: [c('New Customers', 'int', m => m.new_customers), c('Returning Customers', 'int', m => m.returning_customers)] },
     ],
   },
   {
     group: 'AWARENESS — are we getting enough exposure?',
     items: [
-      { label: 'Impressions', fmt: 'int', kind: 'flow', value: m => m.impressions },
-      { label: 'Video Views', fmt: 'int', kind: 'flow', value: m => m.video_views },
-      { label: 'Total Page Views', fmt: 'int', kind: 'flow', value: m => m.page_views },
-      { label: 'New Affiliate Videos', fmt: 'int', kind: 'flow', value: m => m.new_videos },
-      ext('New L3+ Affiliate Videos', 'int'),
+      { label: 'Impressions', fmt: 'int', kind: 'flow', value: m => m.impressions,
+        children: [c('Shop-Tab Impressions', 'int', m => m.card_impr), c('LIVE Impressions', 'int', m => m.live_impr), c('Video Impressions', 'int', m => m.video_impr)] },
+      { label: 'Video Views', fmt: 'int', kind: 'flow', value: m => m.video_views,
+        children: [xc('L3+ Affiliate Video Views', 'int')] },
+      { label: 'Total Page Views', fmt: 'int', kind: 'flow', value: m => m.page_views,
+        children: [c('Shop-Tab PV', 'int', m => m.card_pv), c('LIVE PV', 'int', m => m.live_pv), c('Video PV', 'int', m => m.video_pv)] },
+      { label: 'New Affiliate Videos', fmt: 'int', kind: 'flow', value: m => m.new_videos,
+        children: [c('Active Creators (Creators Posting)', 'int', m => m.active_creators)] },
+      { label: 'New L3+ Affiliate Videos', fmt: 'int', kind: 'flow', value: () => null, external: true,
+        children: [xc('Active L3+ Creators', 'int')] },
       ext('% of Videos from L3+', 'pct'),
       { label: 'Avg Views per Affiliate Video', fmt: 'int', kind: 'rate', value: m => rate(m.video_views, m.new_videos),
         children: [c('Video Views', 'int', m => m.video_views), c('New Affiliate Videos', 'int', m => m.new_videos)] },
@@ -93,7 +102,11 @@ const DEFS: { group: string; items: Def[] }[] = [
     items: [
       { label: 'Orders', fmt: 'int', kind: 'flow', value: m => m.orders },
       { label: 'CTR (PV / Impressions)', fmt: 'pct', kind: 'rate', value: m => rate(m.page_views, m.impressions),
-        children: [c('Total Page Views', 'int', m => m.page_views), c('Impressions', 'int', m => m.impressions)] },
+        children: [
+          c('Video CTR', 'pct', m => rate(m.video_pv, m.video_impr)),
+          c('Shop-Tab CTR', 'pct', m => rate(m.card_pv, m.card_impr)),
+          c('LIVE CTR', 'pct', m => rate(m.live_pv, m.live_impr)),
+        ] },
       { label: 'CTOR (Orders / PV)', fmt: 'pct', kind: 'rate', value: m => rate(m.orders, m.page_views),
         children: [c('Orders', 'int', m => m.orders), c('Total Page Views', 'int', m => m.page_views)] },
       { label: 'Orders per 1,000 Views', fmt: 'ratio', kind: 'rate', value: m => (m.video_views ? (m.orders / m.video_views) * 1000 : null),
@@ -105,10 +118,8 @@ const DEFS: { group: string; items: Def[] }[] = [
     items: [
       { label: 'AOV (GMV / Orders)', fmt: 'money', kind: 'rate', value: m => rate(m.gmv, m.orders),
         children: [c('GMV', 'money', m => m.gmv), c('Orders', 'int', m => m.orders)] },
-      { label: 'Units Sold', fmt: 'int', kind: 'flow', value: m => m.units },
       { label: 'Units per Order', fmt: 'ratio', kind: 'rate', value: m => rate(m.units, m.orders),
         children: [c('Units Sold', 'int', m => m.units), c('Orders', 'int', m => m.orders)] },
-      { label: 'Refund GMV', fmt: 'money', kind: 'flow', inverse: true, value: m => m.refund_gmv },
       { label: 'Refund Rate (% of GMV)', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.refund_gmv, m.gmv),
         children: [c('Refund GMV', 'money', m => m.refund_gmv), c('GMV', 'money', m => m.gmv)] },
     ],
@@ -117,12 +128,14 @@ const DEFS: { group: string; items: Def[] }[] = [
     group: 'AVAILABILITY — can we actually fulfil the demand?',
     items: [
       { label: 'Sales-Weighted In-Stock Rate', fmt: 'pct', kind: 'rate', value: m => rate(m.instock_num, m.instock_den),
-        children: [c('In-Stock GMV', 'money', m => m.instock_num), c('Total GMV (rated SKUs)', 'money', m => m.instock_den)] },
+        children: [
+          c('In-Stock Rate (SKU count, unweighted)', 'pct', m => rate(m.skus_live, m.skus_live + m.skus_oos)),
+          c('SKUs Live', 'int', m => m.skus_live),
+          c('SKUs Out of Stock', 'int', m => m.skus_oos),
+        ] },
       ext('Shop Health Score (SPS)', 'ratio'),
       { label: 'Late Dispatch Rate', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.late_orders, m.order_rows),
         children: [c('Late Orders', 'int', m => m.late_orders), c('Total Orders', 'int', m => m.order_rows)] },
-      { label: 'SKUs Live', fmt: 'int', kind: 'snapshot', value: m => m.skus_live },
-      { label: 'SKUs Out of Stock', fmt: 'int', kind: 'snapshot', inverse: true, value: m => m.skus_oos },
     ],
   },
   {
@@ -204,7 +217,7 @@ export function buildTree(
       const row = compute(def.value, def.kind, def.inverse, def.fmt);
       row.label = def.label;
       row.external = def.external;
-      if (def.children) row.children = def.children.map(ch => { const r = compute(ch.value, 'flow', false, ch.fmt); r.label = ch.label; return r; });
+      if (def.children) row.children = def.children.map(ch => { const r = compute(ch.value, 'flow', false, ch.fmt); r.label = ch.label; r.external = ch.external; return r; });
       return row;
     }),
   }));
