@@ -74,6 +74,7 @@ export default function Page() {
 
       {tab === 'brand' && (
         <section>
+          <p className="sub">Traffic → Conversion → Value → Availability. Pick a brand and week — every number below recalculates live from TimescaleDB.</p>
           <div className="controls">
             <label className="ctl"><span>BRAND</span>
               <select value={brand} onChange={e => setBrand(e.target.value)}>
@@ -82,6 +83,13 @@ export default function Page() {
             </label>
             <WeekPicker />
             <EmvInputs />
+          </div>
+          <div className="notebox">
+            <b>EMV (Earned Media Value)</b> = (Video Views ÷ 1,000) × $/1,000-views + (Likes+Comments+Shares) × $/engagement.
+            Views price CPM-style, per 1,000; engagements price per individual like/comment/share, <b>not per 1,000</b>,
+            since each is its own unit of value. Adjust either rate above to see EMV recompute live. Rows with a
+            {' '}<span className="twist" style={{ marginRight: 0 }}>▸</span>{' '}toggle next to their name are numerator/denominator
+            ratios — click the toggle to expand the raw components behind the percentage.
           </div>
           <MetricTree brand={brand} week={week} emvV={emvV} emvE={emvE} onMeta={onMeta} />
         </section>

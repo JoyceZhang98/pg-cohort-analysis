@@ -179,3 +179,8 @@ tr.extrow td.lead.metric { font-weight: 500; }
 .exttag { display: inline-block; margin-left: 8px; font-size: 9px; font-weight: 700; letter-spacing: .04em;
   text-transform: uppercase; color: var(--muted); background: var(--chip); border: 1px solid var(--line);
   border-radius: 5px; padding: 1px 6px; vertical-align: middle; }
+
+/* ---------- note box (EMV / formula explainer) ---------- */
+.notebox { background: var(--chip); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 18px; margin: 0 0 22px; color: var(--muted); font-size: 13px; line-height: 1.6; max-width: 1200px; }
+.notebox b { color: var(--ink); font-weight: 700; }
