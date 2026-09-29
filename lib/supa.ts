@@ -11,7 +11,7 @@ export function supaPool(): Pool | null {
   if (global._supaPool !== undefined) return global._supaPool;
   const url = process.env.SUPABASE_DB_URL;
   global._supaPool = url
-    ? new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, max: 3, keepAlive: true })
+    ? new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, max: 3, keepAlive: true, connectionTimeoutMillis: 8000 })
     : null;
   return global._supaPool;
 }
