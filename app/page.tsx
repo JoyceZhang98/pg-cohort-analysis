@@ -18,7 +18,12 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'brand', label: 'Brand Dashboard' },
   { id: 'internal', label: 'Internal Dashboard' },
 ];
-const wkLabel = (k: string) => { const [y, m, d] = k.split('-'); return `${m}/${d}/${y.slice(2)}`; };
+const wkLabel = (k: string) => {
+  const start = new Date(k + 'T00:00:00Z');
+  const end = new Date(start.getTime() + 6 * 864e5);
+  const mo = (d: Date) => d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+  return `${mo(start)} ${start.getUTCDate()} – ${mo(end)} ${end.getUTCDate()}, ${end.getUTCFullYear()}`;
+};
 
 export default function Page() {
   const [tab, setTab] = useState<Tab>('exec');
