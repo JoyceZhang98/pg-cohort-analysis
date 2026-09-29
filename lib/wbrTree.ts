@@ -45,7 +45,11 @@ const DEFS: { group: string; items: Def[] }[] = [
       { label: 'GMV', fmt: 'money', kind: 'flow', value: m => m.gmv,
         children: [c('Video GMV', 'money', m => m.video_gmv), c('Live GMV', 'money', m => m.live_gmv), c('Product-Card GMV', 'money', m => m.card_gmv)] },
       { label: 'Affiliate GMV', fmt: 'money', kind: 'flow', value: m => m.affiliate_gmv,
-        children: [xc('Open Plan %', 'pct'), xc('Target Plan %', 'pct'), xc('TAP %', 'pct')] },
+        children: [
+          c('Open Plan %', 'pct', m => rate(m.aff_gmv_open, m.affiliate_gmv)),
+          c('Target Plan %', 'pct', m => rate(m.aff_gmv_target, m.affiliate_gmv)),
+          c('TAP %', 'pct', m => rate(m.aff_gmv_tap, m.affiliate_gmv)),
+        ] },
       { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.subsidy, m.gmv + m.subsidy),
         children: [c('Subsidy $', 'money', m => m.subsidy), c('GMV with Subsidies', 'money', m => m.gmv + m.subsidy)] },
       ext('# of Hero Products', 'int'),

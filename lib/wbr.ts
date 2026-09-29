@@ -13,6 +13,7 @@ export type Measures = {
   live_gmv: number;
   card_gmv: number;
   affiliate_gmv: number;
+  aff_gmv_open: number; aff_gmv_target: number; aff_gmv_tap: number; // affiliate GMV by plan
   ad_spend: number;
   ad_gmv: number;
   subsidy: number;
@@ -49,6 +50,7 @@ export type Measures = {
 
 const ZERO: Measures = {
   gmv: 0, video_gmv: 0, live_gmv: 0, card_gmv: 0, affiliate_gmv: 0, ad_spend: 0, ad_gmv: 0,
+  aff_gmv_open: 0, aff_gmv_target: 0, aff_gmv_tap: 0,
   subsidy: 0, impressions: 0, live_impr: 0, video_impr: 0, card_impr: 0, video_views: 0,
   page_views: 0, live_pv: 0, video_pv: 0, card_pv: 0, units: 0, orders: 0, customers: 0,
   new_customers: 0, returning_customers: 0,
@@ -103,7 +105,10 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
        group by 1`, [s]),
     pool.query(
       `select to_char(date_trunc('week', ao.create_time),'YYYY-MM-DD') wk,
-         sum(ao.price_amount * coalesce(ao.quantity,1)) aff_gmv
+         sum(ao.price_amount * coalesce(ao.quantity,1)) aff_gmv,
+         sum(ao.price_amount * coalesce(ao.quantity,1)) filter (where nullif(ao.platform_open_collaboration_id,'') is not null) aff_open,
+         sum(ao.price_amount * coalesce(ao.quantity,1)) filter (where nullif(ao.platform_target_collaboration_id,'') is not null) aff_target,
+         sum(ao.price_amount * coalesce(ao.quantity,1)) filter (where nullif(ao.platform_campaign_id,'') is not null) aff_tap
        from affiliate_order ao where ao.shop_id = any($1) and ao.create_time >= ${since}
        group by 1`, [s]),
     pool.query(
@@ -161,7 +166,7 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
   for (const r of prsd.rows) bump(r.wk, m => { m.gmv += n(r.gmv); m.video_gmv += n(r.video_gmv); m.live_gmv += n(r.live_gmv); m.card_gmv += n(r.card_gmv); m.impressions += n(r.impressions); m.live_impr += n(r.live_impr); m.video_impr += n(r.video_impr); m.card_impr += n(r.card_impr); m.page_views += n(r.page_views); m.live_pv += n(r.live_pv); m.video_pv += n(r.video_pv); m.card_pv += n(r.card_pv); m.units += n(r.units); m.orders += n(r.orders); });
   for (const r of ord.rows) bump(r.wk, m => { m.customers += n(r.customers); m.order_rows += n(r.order_rows); m.late_orders += n(r.late); m.subsidy += n(r.subsidy); });
   for (const r of custNR.rows) bump(r.wk, m => { m.new_customers += n(r.new_cust); m.returning_customers += n(r.returning_cust); });
-  for (const r of aff.rows) bump(r.wk, m => { m.affiliate_gmv += n(r.aff_gmv); });
+  for (const r of aff.rows) bump(r.wk, m => { m.affiliate_gmv += n(r.aff_gmv); m.aff_gmv_open += n(r.aff_open); m.aff_gmv_target += n(r.aff_target); m.aff_gmv_tap += n(r.aff_tap); });
   for (const r of adv.rows) bump(r.wk, m => { m.ad_spend += n(r.ad_spend); m.ad_gmv += n(r.ad_gmv); });
   for (const r of vid.rows) bump(r.wk, m => { m.new_videos += n(r.new_videos); });
   for (const r of vsd.rows) bump(r.wk, m => { m.video_views += n(r.views); m.likes += n(r.likes); m.comments += n(r.comments); m.shares += n(r.shares); });
