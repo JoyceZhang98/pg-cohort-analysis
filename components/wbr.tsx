@@ -56,7 +56,7 @@ export function Spark({ values, inverse }: { values: (number | null)[]; inverse?
 }
 
 type Row = {
-  label: string; fmt: Fmt; inverse?: boolean;
+  label: string; fmt: Fmt; inverse?: boolean; external?: boolean;
   weekly: (number | null)[]; wowAbs: number | null; wowPct: number | null; mtd: number | null; prior: number | null; momPct: number | null;
   children?: Row[];
 };
@@ -132,10 +132,11 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
                 const isOpen = open.has(r.label);
                 return (
                   <Fragment key={r.label}>
-                    <tr className={hasKids ? 'expandable' : ''} onClick={hasKids ? () => toggle(r.label) : undefined}>
+                    <tr className={`${hasKids ? 'expandable' : ''}${r.external ? ' extrow' : ''}`} onClick={hasKids ? () => toggle(r.label) : undefined}>
                       <td className="lead metric">
                         {hasKids ? <span className="twist">{isOpen ? '▾' : '▸'}</span> : <span className="twist sp" />}
                         {r.label}
+                        {r.external && <span className="exttag" title="No TimescaleDB source — external data pending">external</span>}
                       </td>
                       {cellsFor(r)}
                     </tr>

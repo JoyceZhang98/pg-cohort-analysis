@@ -172,3 +172,10 @@ table.drv td.lead.metric { font-weight: 700; }
 table.drv tr.biggest td { background: #fff8e6; }
 table.drv .mover { color: #c48a00; font-size: 11px; font-weight: 700; margin-left: 8px; }
 @media (prefers-color-scheme: dark) { table.drv tr.biggest td { background: #2a2410; } table.drv .mover { color: #e0b03a; } }
+
+/* ---------- external placeholder rows ---------- */
+tr.extrow td { color: var(--muted); }
+tr.extrow td.lead.metric { font-weight: 500; }
+.exttag { display: inline-block; margin-left: 8px; font-size: 9px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted); background: var(--chip); border: 1px solid var(--line);
+  border-radius: 5px; padding: 1px 6px; vertical-align: middle; }
