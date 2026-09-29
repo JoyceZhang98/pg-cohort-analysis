@@ -10,6 +10,8 @@ const BRANDS = [
   { slug: 'farmacy', label: 'Farmacy' },
   { slug: 'olay', label: 'Olay' },
   { slug: 'secret', label: 'Secret' },
+  { slug: 'head-shoulders', label: 'Head & Shoulders' },
+  { slug: 'old-spice', label: 'Old Spice' },
 ];
 type Tab = 'instructions' | 'exec' | 'brand' | 'internal';
 const TABS: { id: Tab; label: string }[] = [
