@@ -13,7 +13,7 @@ const TREE: { group: string; rows: Def[] }[] = [
       ['Subsidy Rate ⬇', 'line_item.platform_discount + seller_discount', 'Subsidy$ ÷ (GMV + Subsidy$)'],
       ['GPM', 'product_stat_rich_daily.gmv ÷ video_stat_rich_daily.views', 'GMV ÷ Views × 1,000'],
       ['Ads ROAS', 'gmv_max_campaign_stat_daily.gross_revenue ÷ .cost', 'Ad GMV ÷ Ad Spend'],
-      ['EMV', 'video_stat_rich_daily.views, likes, comments, shares', 'Views/1k × $rateV + (Likes+Comments+Shares)/1k × $rateE'],
+      ['EMV', 'video_stat_rich_daily.views, likes, comments, shares', 'Views/1k × $rateV + (Likes+Comments+Shares) × $rateE — engagements priced per individual (default $10 /1k views, $0.30 /engagement, both editable)'],
       ['Active Creators', 'video.affiliate_id', 'distinct creators who posted in the period'],
       ['Lifetime Creators', 'video.affiliate_id, video_post_time', 'cumulative distinct creators through the period end (snapshot)'],
       ['Total Customers', 'order.user_id', 'distinct buyers'],
@@ -119,7 +119,8 @@ export function Instructions() {
       <ul>
         <li><b>Trailing 5 weeks</b> — the five most recent complete Monday-start weeks (the current partial week is excluded).</li>
         <li><b>WoW</b> — report week vs. the prior week. Δ is absolute (percentage points for rate rows); % is relative.</li>
-        <li><b>MTD / MoM</b> — a week belongs to the month its Monday falls in. MTD sums the report month&rsquo;s weeks up to the report week; MoM compares that to the prior full month.</li>
+        <li><b>MTD / Prior</b> — a week belongs to the month its Monday falls in. <b>MTD</b> sums the report month&rsquo;s weeks up to the report week; <b>Prior</b> is the previous full month (same basis) for comparison.</li>
+        <li><b>GMV Driver Check</b> (top of Brand Dashboard) — decomposes GMV = Impressions × CTR × CTOR × AOV for this week vs. last week. The <b>biggest mover</b> is chosen by |Log Δ| (100·ln(this ÷ last)), which is symmetric for rises/falls and sums exactly to GMV&rsquo;s own change — more rigorous than raw WoW %.</li>
         <li><b>Rates</b> (CTR, CTOR, AOV, ROAS, GPM, In-Stock…) are recomputed from summed numerators &amp; denominators for each period — never averaged.</li>
         <li><b>Drill-down (▸)</b> — ratio/composite rows expand to their raw numerator/denominator components.</li>
         <li><b>Colors</b> — green = improvement, red = decline. Rows marked <b>⬇</b> are inverse (lower is better), so their colors are flipped.</li>
