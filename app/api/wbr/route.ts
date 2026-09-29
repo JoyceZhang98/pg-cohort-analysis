@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchWeekly, fetchLifetimeCreators, fetchMonthGoal, getLastSupaError } from '@/lib/wbr';
+import { fetchWeekly, fetchLifetimeCreators, fetchMonthGoal } from '@/lib/wbr';
 import { buildTree, mondaysEndingAt } from '@/lib/wbrTree';
 import { BRANDS, brandBySlug } from '@/lib/brands';
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     ]);
     const tree = buildTree(series, lifetime, reportWeek, emvV, emvE, monthGoal);
 
-    return NextResponse.json({ brand: label, slug: brand, reportWeek, availableWeeks, tree, supaDebug: getLastSupaError(), generatedAt: new Date().toISOString() });
+    return NextResponse.json({ brand: label, slug: brand, reportWeek, availableWeeks, tree, generatedAt: new Date().toISOString() });
   } catch (e) {
     return NextResponse.json({ error: String((e as Error).message) }, { status: 500 });
   }

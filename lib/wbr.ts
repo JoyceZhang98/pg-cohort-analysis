@@ -1,8 +1,6 @@
 import { pool } from './db';
 import { supaConfigured, supaRpc } from './supa';
 
-let _lastSupaError = ''; // temporary diagnostic
-export function getLastSupaError() { return _lastSupaError; }
 
 // ---------- Weekly metrics engine for the WBR ----------
 // Everything is bucketed into Monday-start weeks (Postgres date_trunc('week')).
@@ -184,11 +182,8 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
       for (const r of sps) bump(r.wk, m => { m.sps = n(r.sps); });
       for (const r of l3) bump(r.wk, m => { m.new_l3_videos += n(r.new_l3); m.active_l3_creators += n(r.active_l3); m.l3_total_videos += n(r.total); });
     } catch (e) {
-      _lastSupaError = (e as Error).message;
-      console.error('Supabase fetch failed (SPS/L3+ will be blank):', _lastSupaError);
+      console.error('Supabase fetch failed (SPS/L3+ will be blank):', (e as Error).message);
     }
-  } else if (supaNames.length) {
-    _lastSupaError = 'SUPABASE_URL / SERVICE_ROLE_KEY not set';
   }
 
   return series;
