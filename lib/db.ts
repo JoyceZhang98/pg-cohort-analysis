@@ -12,7 +12,7 @@ function makePool() {
   // returns blank for its section instead of hanging (and piling up) the whole report.
   const common = {
     ssl: { rejectUnauthorized: false },
-    max: 5,
+    max: 10,
     keepAlive: true,
     application_name: 'pg-wbr',
     statement_timeout: 30_000,
