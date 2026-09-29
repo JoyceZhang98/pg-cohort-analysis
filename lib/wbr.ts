@@ -44,6 +44,10 @@ export type Measures = {
   cart_adds: number;   // LIVE add-to-cart events (product_live_stat_rich_daily.add_to_cart_count)
   cart_impr: number;   // LIVE product impressions (denominator for add-to-cart rate)
   cart_orders: number; // LIVE sku orders (numerator for cart→order conversion)
+  // GMV Max creative delivery status — distinct creatives by their latest status each week
+  // (gmv_max_creative_stat_daily.creative_delivery_status; NOT_DELIVERYING is TikTok's spelling).
+  cd_in_queue: number; cd_learning: number; cd_delivering: number; cd_not_delivering: number;
+  cd_auth_needed: number; cd_not_active: number; cd_unavailable: number; cd_excluded: number; cd_rejected: number;
   skus_live: number;
   skus_oos: number;
   instock_num: number; // unit-weighted in-stock numerator (units sold on in-stock SKU-days)
@@ -64,6 +68,8 @@ const ZERO: Measures = {
   late_orders: 0, order_rows: 0, hero_products: 0, refund_gmv: 0, new_videos: 0, active_creators: 0, likes: 0,
   comments: 0, shares: 0, samples_applied: 0, samples_approved: 0, samples_delivered: 0, target_plan_sends: 0,
   cart_adds: 0, cart_impr: 0, cart_orders: 0,
+  cd_in_queue: 0, cd_learning: 0, cd_delivering: 0, cd_not_delivering: 0,
+  cd_auth_needed: 0, cd_not_active: 0, cd_unavailable: 0, cd_excluded: 0, cd_rejected: 0,
   skus_live: 0, skus_oos: 0, instock_num: 0, instock_den: 0,
   sps: 0, new_l3_videos: 0, active_l3_creators: 0, l3_total_videos: 0,
 };
@@ -109,12 +115,19 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
        where p.shop_id = any($1) and psd.date >= ${since}
        group by 1`, [s]),
     pool.query(
+      // Counts from "order" alone — joining line_item here forced a count(distinct) over the
+      // exploded join (~15s); split out, this is ~1s. Subsidy is summed separately (subs query).
       `select to_char(date_trunc('week', o.create_time),'YYYY-MM-DD') wk,
          count(distinct o.user_id) customers, count(distinct o.id) order_rows,
-         count(distinct o.id) filter (where o.rts_time is not null and o.rts_sla_time is not null and o.rts_time > o.rts_sla_time) late,
+         count(distinct o.id) filter (where o.rts_time is not null and o.rts_sla_time is not null and o.rts_time > o.rts_sla_time) late
+       from "order" o
+       where o.shop_id = any($1) and o.create_time >= ${since}
+       group by 1`, [s]),
+    pool.query(
+      `select to_char(date_trunc('week', o.create_time),'YYYY-MM-DD') wk,
          coalesce(sum((nullif(li.platform_discount,''))::numeric),0) subsidy_tiktok,
          coalesce(sum((nullif(li.seller_discount,''))::numeric),0) subsidy_seller
-       from "order" o left join line_item li on li.order_id = o.id
+       from "order" o join line_item li on li.order_id = o.id
        where o.shop_id = any($1) and o.create_time >= ${since}
        group by 1`, [s]),
     pool.query(
@@ -213,14 +226,22 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
        from product_live_stat_rich_daily ps join product p on p.id = ps.product_id
        where p.shop_id = any($1) and ps.date >= ${since}
        group by 1`, [s]),
+    pool.query(
+      `with base as (
+         select date_trunc('week', cs.date) wk, cs.creative_platform_id cid, cs.creative_delivery_status st,
+                row_number() over (partition by date_trunc('week', cs.date), cs.creative_platform_id order by cs.date desc) rn
+         from gmv_max_creative_stat_daily cs join gmv_max_campaign gc on gc.id = cs.campaign_id
+         where gc.shop_id = any($1) and cs.date >= ${since})
+       select to_char(wk,'YYYY-MM-DD') wk, st, count(*) n from base where rn = 1 group by 1, 2`, [s]),
   ]);
   settled.forEach((r, i) => { if (r.status === 'rejected') console.error(`wbr query #${i} failed:`, (r.reason as Error)?.message); });
-  const [prsd, ord, custNR, aff, adv, vid, vsd, ret, smp, smpAppr, smpSent, stock, active, tps, hero, cart] =
+  const [prsd, ord, subs, custNR, aff, adv, vid, vsd, ret, smp, smpAppr, smpSent, stock, active, tps, hero, cart, cds] =
     settled.map(r => (r.status === 'fulfilled' ? r.value : { rows: [] }));
 
   const n = (x: unknown) => Number(x) || 0;
   for (const r of prsd.rows) bump(r.wk, m => { m.gmv += n(r.gmv); m.video_gmv += n(r.video_gmv); m.live_gmv += n(r.live_gmv); m.card_gmv += n(r.card_gmv); m.impressions += n(r.impressions); m.live_impr += n(r.live_impr); m.video_impr += n(r.video_impr); m.card_impr += n(r.card_impr); m.page_views += n(r.page_views); m.live_pv += n(r.live_pv); m.video_pv += n(r.video_pv); m.card_pv += n(r.card_pv); m.units += n(r.units); m.orders += n(r.orders); });
-  for (const r of ord.rows) bump(r.wk, m => { m.customers += n(r.customers); m.order_rows += n(r.order_rows); m.late_orders += n(r.late); m.subsidy_tiktok += n(r.subsidy_tiktok); m.subsidy_seller += n(r.subsidy_seller); m.subsidy += n(r.subsidy_tiktok) + n(r.subsidy_seller); });
+  for (const r of ord.rows) bump(r.wk, m => { m.customers += n(r.customers); m.order_rows += n(r.order_rows); m.late_orders += n(r.late); });
+  for (const r of subs.rows) bump(r.wk, m => { m.subsidy_tiktok += n(r.subsidy_tiktok); m.subsidy_seller += n(r.subsidy_seller); m.subsidy += n(r.subsidy_tiktok) + n(r.subsidy_seller); });
   for (const r of custNR.rows) bump(r.wk, m => { m.new_customers += n(r.new_cust); m.returning_customers += n(r.returning_cust); });
   for (const r of aff.rows) bump(r.wk, m => { m.affiliate_gmv += n(r.aff_gmv); m.aff_gmv_open += n(r.aff_open); m.aff_gmv_target += n(r.aff_target); m.aff_gmv_tap += n(r.aff_tap); });
   for (const r of adv.rows) bump(r.wk, m => { m.ad_spend += n(r.ad_spend); m.ad_gmv += n(r.ad_gmv); });
@@ -235,6 +256,11 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
   for (const r of tps.rows) bump(r.wk, m => { m.target_plan_sends += n(r.sends); });
   for (const r of hero.rows) bump(r.wk, m => { m.hero_products += n(r.hero); });
   for (const r of cart.rows) bump(r.wk, m => { m.cart_adds += n(r.atc); m.cart_impr += n(r.impr); m.cart_orders += n(r.sku_ord); });
+  const CDMAP: Record<string, keyof Measures> = {
+    IN_QUEUE: 'cd_in_queue', LEARNING: 'cd_learning', DELIVERING: 'cd_delivering', NOT_DELIVERYING: 'cd_not_delivering',
+    AUTHORIZATION_NEEDED: 'cd_auth_needed', NOT_ACTIVE: 'cd_not_active', UNAVAILABLE: 'cd_unavailable', EXCLUDED: 'cd_excluded', REJECTED: 'cd_rejected',
+  };
+  for (const r of cds.rows) { const key = CDMAP[r.st as string]; if (key) bump(r.wk, m => { (m[key] as number) += n(r.n); }); }
 
   // ---- Supabase over HTTPS REST (best-effort) — SPS + L3+ ----
   if (supaConfigured() && supaNames.length) {

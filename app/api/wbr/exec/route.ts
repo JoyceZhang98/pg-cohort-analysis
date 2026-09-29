@@ -1,75 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchWeekly, Measures } from '@/lib/wbr';
-import { BRANDS } from '@/lib/brands';
+import { computeExecView, ExecView } from '@/lib/views';
+import { cacheGet } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-function mondayOf(d: Date): string {
-  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dow = (t.getUTCDay() + 6) % 7;
-  t.setUTCDate(t.getUTCDate() - dow);
-  return t.toISOString().slice(0, 10);
-}
-const rate = (n: number, d: number) => (d ? n / d : null);
-
-const METRICS: { key: string; label: string; fmt: 'money' | 'int' | 'pct' | 'x' | 'ratio'; f: (m: Measures) => number | null }[] = [
-  { key: 'gmv', label: 'GMV', fmt: 'money', f: m => m.gmv },
-  { key: 'views', label: 'Video Views', fmt: 'int', f: m => m.video_views },
-  { key: 'ctr', label: 'CTR', fmt: 'pct', f: m => rate(m.page_views, m.impressions) },
-  { key: 'ctor', label: 'CTOR', fmt: 'pct', f: m => rate(m.orders, m.page_views) },
-  { key: 'aov', label: 'AOV', fmt: 'money', f: m => rate(m.gmv, m.orders) },
-  { key: 'instock', label: 'In-Stock % (Sales-Wtd)', fmt: 'pct', f: m => rate(m.instock_num, m.instock_den) },
-  { key: 'roas', label: 'Ads ROAS', fmt: 'x', f: m => rate(m.ad_gmv, m.ad_spend) },
-  { key: 'sps', label: 'Shop Health', fmt: 'ratio', f: m => m.sps || null },
-];
-
 export async function GET(req: NextRequest) {
-  const p = req.nextUrl.searchParams;
+  const week = req.nextUrl.searchParams.get('week');
+
+  // Default view (latest week) → serve the daily precomputed snapshot.
+  if (!week) {
+    const hit = await cacheGet<ExecView>('exec:latest');
+    if (hit) return NextResponse.json({ ...hit.payload, cachedAt: hit.updatedAt });
+  }
+
   try {
-    const perBrand = await Promise.all(BRANDS.map(async b => ({ b, series: await fetchWeekly([b.shopId], [b.supaName]) })));
-    const currentMonday = mondayOf(new Date());
-    const allWeeks = new Set<string>();
-    perBrand.forEach(x => x.series.forEach((_v, k) => { if (k < currentMonday) allWeeks.add(k); }));
-    const complete = [...allWeeks].sort();
-    if (!complete.length) return NextResponse.json({ error: 'no data' }, { status: 200 });
-    const reportWeek = p.get('week') && complete.includes(p.get('week')!) ? p.get('week')! : complete[complete.length - 1];
-    const prevWeek = complete[complete.indexOf(reportWeek) - 1] ?? null;
-
-    const rowFor = (series: Map<string, Measures>) => {
-      const cur = series.get(reportWeek);
-      const prev = prevWeek ? series.get(prevWeek) : undefined;
-      return METRICS.map(mt => {
-        const v = cur ? mt.f(cur) : null;
-        const pv = prev ? mt.f(prev) : null;
-        let delta: number | null = null, deltaKind: 'pct' | 'pp' | 'pt' = 'pct';
-        if (v !== null && pv !== null) {
-          if (mt.fmt === 'pct') { delta = v - pv; deltaKind = 'pp'; }
-          else { delta = pv !== 0 ? (v - pv) / Math.abs(pv) : null; deltaKind = 'pct'; }
-        }
-        return { key: mt.key, label: mt.label, fmt: mt.fmt, value: v, delta, deltaKind };
-      });
-    };
-
-    const brandRows = perBrand.map(x => ({ brand: x.b.label, cells: rowFor(x.series) }));
-    // TOTAL / WEIGHTED = sum of all brand series, week by week
-    const totalSeries = new Map<string, Measures>();
-    perBrand.forEach(x => x.series.forEach((m, k) => {
-      const acc = totalSeries.get(k);
-      if (!acc) totalSeries.set(k, { ...m });
-      else (Object.keys(m) as (keyof Measures)[]).forEach(f => { acc[f] += m[f]; });
-    }));
-    const totalRow = { brand: 'TOTAL / WEIGHTED', cells: rowFor(totalSeries) };
-    // SPS shouldn't sum across brands — override the total with the brand average.
-    const spsVals = perBrand.map(x => x.series.get(reportWeek)?.sps).filter((v): v is number => !!v && v > 0);
-    const spsCell = totalRow.cells.find(c => c.key === 'sps');
-    if (spsCell) { spsCell.value = spsVals.length ? spsVals.reduce((a, b) => a + b, 0) / spsVals.length : null; spsCell.delta = null; }
-
-    return NextResponse.json({
-      reportWeek, availableWeeks: complete.slice(-10).reverse(),
-      metrics: METRICS.map(m => ({ key: m.key, label: m.label, fmt: m.fmt })),
-      rows: [...brandRows, totalRow], generatedAt: new Date().toISOString(),
-    });
+    const view = await computeExecView(week);
+    if ('error' in view) return NextResponse.json(view, { status: 200 });
+    return NextResponse.json(view);
   } catch (e) {
     return NextResponse.json({ error: String((e as Error).message) }, { status: 500 });
   }

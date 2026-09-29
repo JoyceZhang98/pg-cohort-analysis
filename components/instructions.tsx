@@ -29,6 +29,7 @@ const TREE: { group: string; rows: Def[] }[] = [
       ['New Affiliate Videos', 'video (by video_post_time)', 'count of videos posted in the period'],
       ['Avg Views per Affiliate Video', 'video_stat_rich_daily.views ÷ video count', 'Views ÷ New Videos'],
       ['Ad Spend', 'gmv_max_campaign_stat_daily.cost', 'Σ (GMV Max ad cost)'],
+      ['↳ Creatives by delivery status', 'gmv_max_creative_stat_daily.creative_delivery_status', 'distinct creatives per status each week (In Queue / Learning / Delivering / Not Delivering / Authorization Needed / Not Active / Unavailable / Excluded / Rejected), counted by each creative’s latest status that week'],
       ['Total Clicks', 'product_stat_rich_daily.page_views', 'Σ product clicks / page views (children: Video / Shop-Tab / LIVE) — placed just above Conversion'],
     ],
   },
@@ -155,7 +156,8 @@ export function Instructions() {
         <li><b>Partial weeks:</b> a week column only appears once all 7 of its days have fully elapsed — in-progress or short weeks are hidden.</li>
         <li><b>Metric definitions</b> now appear on hover (the small <b>?</b> next to each metric name), not as inline text. EMV rate inputs ($/1,000 views, $/engagement) also carry hover definitions.</li>
         <li><b>Now sourced (via Supabase):</b> Monthly GMV Goal / % attainment, L3+ creator &amp; video rows, and Shop Health (SPS). <b># of Hero Products</b> is computed from TimescaleDB (≥ $10k GMV &amp; ≥ 1,000 orders, trailing 30d).</li>
-        <li><b>Still external / placeholder</b> (no source yet): Halo Effect, Email Outreach, Videos in Learning / Delivery (the warehouse has no ad learning-vs-delivery phase — only ENABLE/DISABLE).</li>
+        <li><b>Creative delivery status</b> (In Queue / Learning / Delivering / Not Delivering / …) drills down from Ad Spend, sourced from <code>gmv_max_creative_stat_daily.creative_delivery_status</code>.</li>
+        <li><b>Still external / placeholder</b> (no source yet): Halo Effect, Email Outreach.</li>
       </ul>
     </div>
   );
