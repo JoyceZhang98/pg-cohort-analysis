@@ -209,3 +209,18 @@ table.drv tr.drvsep td { padding: 4px 12px; font-size: 11px; font-weight: 700; l
   .infomark { color: #9aa4b2; background: #1c2733; border-color: #2b3947; }
   .infomark:hover, .infomark:focus { color: #cfe0ff; background: #223655; border-color: #33507e; }
 }
+
+/* Two-level section headers: HEADLINE super-band + its lighter sub-bands */
+.superrow td { background: var(--band); color: #fff; font-weight: 800; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; text-align: center; padding: 10px 12px; }
+.grouprow.sub td { background: var(--chip); color: var(--muted); font-weight: 700; font-size: 11px; letter-spacing: .05em; padding: 5px 12px 5px 26px; }
+@media (prefers-color-scheme: dark) { .grouprow.sub td { background: #10151f; color: #aeb6c6; } }
+
+/* Hover tooltip for metric definitions (portal'd to body so the table's overflow can't clip it) */
+.infotip {
+  position: fixed; transform: translate(-50%, -100%); z-index: 9999;
+  max-width: 320px; white-space: normal; text-align: left;
+  background: #10182b; color: #f3f6fc; font-size: 12px; font-weight: 500; line-height: 1.5;
+  letter-spacing: 0; text-transform: none; padding: 8px 10px; border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.28); pointer-events: none;
+}
+.infotip::after { content: ''; position: absolute; left: 50%; top: 100%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: #10182b; }

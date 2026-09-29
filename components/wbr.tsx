@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 
 export type Fmt = 'money' | 'int' | 'pct' | 'x' | 'ratio';
 
@@ -42,7 +42,19 @@ export const DEFINITIONS: Record<string, string> = {
 };
 
 export function Info({ text }: { text: string }) {
-  return <span className="infomark" tabIndex={0} title={text} aria-label={text}>?</span>;
+  const ref = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const show = () => { const r = ref.current?.getBoundingClientRect(); if (r) setPos({ x: r.left + r.width / 2, y: r.top }); };
+  const hide = () => setPos(null);
+  return (
+    <span
+      ref={ref} className="infomark" tabIndex={0} aria-label={text}
+      onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
+      onClick={e => { e.stopPropagation(); }}
+    >?
+      {pos && <span className="infotip" style={{ left: pos.x, top: pos.y - 10 }}>{text}</span>}
+    </span>
+  );
 }
 
 export function fmtVal(v: number | null, fmt: Fmt): string {
@@ -103,7 +115,7 @@ type Row = {
   children?: Row[];
 };
 type Driver = { driver: string; fmt: Fmt; thisWeek: number | null; lastWeek: number | null; wowAbs: number | null; wowPct: number | null; logDelta: number | null };
-type Tree = { weeks: string[]; groups: { name: string; rows: Row[] }[]; reportWeek: string; months: { mtd: string; prior: string }; drivers: { total: Driver | null; rows: Driver[]; biggest: number } };
+type Tree = { weeks: string[]; groups: { name: string; super?: string; rows: Row[] }[]; reportWeek: string; months: { mtd: string; prior: string }; drivers: { total: Driver | null; rows: Driver[]; biggest: number } };
 type WbrData = { brand: string; reportWeek: string; availableWeeks: string[]; tree: Tree; error?: string };
 
 // Monday key → compact week range, e.g. "Aug 24–30" or cross-month "Aug 31–Sep 6".
@@ -178,9 +190,12 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
           </tr>
         </thead>
         <tbody>
-          {data.tree.groups.map(g => (
+          {data.tree.groups.map((g, gi) => (
             <Fragment key={g.name}>
-              <tr className="grouprow"><td colSpan={data.tree.weeks.length + 6}>{g.name}</td></tr>
+              {g.super && g.super !== data.tree.groups[gi - 1]?.super && (
+                <tr className="superrow"><td colSpan={data.tree.weeks.length + 6}>{g.super}</td></tr>
+              )}
+              <tr className={g.super ? 'grouprow sub' : 'grouprow'}><td colSpan={data.tree.weeks.length + 6}>{g.name}</td></tr>
               {g.rows.map(r => {
                 const hasKids = !!r.children?.length;
                 const isOpen = open.has(r.label);

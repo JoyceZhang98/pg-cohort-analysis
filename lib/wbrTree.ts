@@ -16,7 +16,7 @@ export type Row = {
   goalAttain?: number | null; // MTD ÷ goal
   children?: Row[]; // raw components behind a ratio / composite (drill-down)
 };
-export type Group = { name: string; rows: Row[] };
+export type Group = { name: string; super?: string; rows: Row[] };
 export type Driver = { driver: string; fmt: Fmt; thisWeek: number | null; lastWeek: number | null; wowAbs: number | null; wowPct: number | null; logDelta: number | null };
 export type Tree = {
   weeks: string[]; groups: Group[]; reportWeek: string;
@@ -36,16 +36,15 @@ const c = (label: string, fmt: Fmt, value: ValFn): Child => ({ label, fmt, value
 const ext = (label: string, fmt: Fmt): Def => ({ label, fmt, kind: 'flow', value: () => null, external: true });
 const xc = (label: string, fmt: Fmt): Child => ({ label, fmt, value: () => null, external: true });
 
-const DEFS: { group: string; items: Def[] }[] = [
+const DEFS: { group: string; super?: string; items: Def[] }[] = [
   {
-    group: 'GMV',
+    group: 'GMV', super: 'HEADLINE',
     items: [
       { label: 'GMV with Subsidies', fmt: 'money', kind: 'flow', value: m => m.gmv + m.subsidy,
         children: [c('GMV', 'money', m => m.gmv), c('TikTok Subsidy', 'money', m => m.subsidy_tiktok), c('Seller Subsidy', 'money', m => m.subsidy_seller)] },
       { label: 'GMV', fmt: 'money', kind: 'flow', value: m => m.gmv,
-        children: [c('Video GMV', 'money', m => m.video_gmv), c('Live GMV', 'money', m => m.live_gmv), c('Product-Card GMV', 'money', m => m.card_gmv)] },
-      { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.subsidy, m.gmv + m.subsidy),
-        children: [c('TikTok Subsidy', 'money', m => m.subsidy_tiktok), c('Seller Subsidy', 'money', m => m.subsidy_seller), c('GMV with Subsidies', 'money', m => m.gmv + m.subsidy)] },
+        children: [c('Video GMV %', 'pct', m => rate(m.video_gmv, m.gmv)), c('Live GMV %', 'pct', m => rate(m.live_gmv, m.gmv)), c('Product-Card GMV %', 'pct', m => rate(m.card_gmv, m.gmv))] },
+      { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.subsidy_tiktok, m.gmv + m.subsidy) },
       { label: 'Affiliate GMV', fmt: 'money', kind: 'flow', value: m => m.affiliate_gmv,
         children: [
           c('Open Plan %', 'pct', m => rate(m.aff_gmv_open, m.affiliate_gmv)),
@@ -58,7 +57,7 @@ const DEFS: { group: string; items: Def[] }[] = [
     ],
   },
   {
-    group: 'MEDIA & CONTENT VALUE',
+    group: 'MEDIA & CONTENT VALUE', super: 'HEADLINE',
     items: [
       { label: 'EMV (Earned Media Value)', fmt: 'money', kind: 'flow', value: (m, ev, ee) => (m.video_views / 1000) * ev + (m.likes + m.comments + m.shares) * ee,
         children: [
@@ -74,7 +73,7 @@ const DEFS: { group: string; items: Def[] }[] = [
     ],
   },
   {
-    group: 'CREATORS & CUSTOMERS',
+    group: 'CREATORS & CUSTOMERS', super: 'HEADLINE',
     items: [
       { label: 'Lifetime Creators', fmt: 'int', kind: 'snapshot', value: (_m, _v, _e, lifetime) => lifetime,
         children: [xc('Lifetime L3+ Creators', 'int')] },
@@ -231,6 +230,7 @@ export function buildTree(
 
   const groups: Group[] = DEFS.map(g => ({
     name: g.group,
+    super: g.super,
     rows: g.items.map(def => {
       const row = compute(def.value, def.kind, def.inverse, def.fmt);
       row.label = def.label;
