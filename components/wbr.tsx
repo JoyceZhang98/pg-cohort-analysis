@@ -57,10 +57,11 @@ export function Spark({ values, inverse }: { values: (number | null)[]; inverse?
 
 type Row = {
   label: string; fmt: Fmt; inverse?: boolean;
-  weekly: (number | null)[]; wowAbs: number | null; wowPct: number | null; mtd: number | null; momPct: number | null;
+  weekly: (number | null)[]; wowAbs: number | null; wowPct: number | null; mtd: number | null; prior: number | null; momPct: number | null;
   children?: Row[];
 };
-type Tree = { weeks: string[]; groups: { name: string; rows: Row[] }[]; reportWeek: string };
+type Driver = { driver: string; fmt: Fmt; thisWeek: number | null; lastWeek: number | null; wowAbs: number | null; wowPct: number | null; logDelta: number | null };
+type Tree = { weeks: string[]; groups: { name: string; rows: Row[] }[]; reportWeek: string; months: { mtd: string; prior: string }; drivers: { rows: Driver[]; biggest: number } };
 type WbrData = { brand: string; reportWeek: string; availableWeeks: string[]; tree: Tree; error?: string };
 
 const wkLabel = (k: string) => { const [, m, d] = k.split('-'); return `${m}/${d}`; };
@@ -99,12 +100,14 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
       <td className="num" style={{ color: deltaColor(r.wowAbs, r.inverse) }}>{fmtDelta(r.wowAbs, r.fmt)}</td>
       <td className="num" style={{ color: deltaColor(r.wowPct, r.inverse) }}>{r.wowPct === null ? '—' : (r.wowPct >= 0 ? '+' : '') + (r.wowPct * 100).toFixed(1) + '%'}</td>
       <td className="num strong">{fmtVal(r.mtd, r.fmt)}</td>
-      <td className="num" style={{ color: deltaColor(r.momPct, r.inverse) }}>{r.momPct === null ? '—' : (r.momPct >= 0 ? '+' : '') + (r.momPct * 100).toFixed(1) + '%'}</td>
+      <td className="num">{fmtVal(r.prior, r.fmt)}</td>
     </>
   );
 
   return (
-    <div className="tablecard">
+    <>
+      <DriverCheck drivers={data.tree.drivers} />
+      <div className="tablecard">
       <table className="wbr">
         <thead>
           <tr>
@@ -112,18 +115,18 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
             <th colSpan={data.tree.weeks.length}>TRAILING 5 WEEKS</th>
             <th rowSpan={2}>Trend</th>
             <th colSpan={2}>WEEK OVER WEEK</th>
-            <th rowSpan={2}>MTD</th>
-            <th rowSpan={2}>MoM %</th>
+            <th colSpan={2}>MONTH TO DATE</th>
           </tr>
           <tr>
             {data.tree.weeks.map(w => <th key={w}>{wkLabel(w)}</th>)}
             <th>Δ</th><th>%</th>
+            <th>MTD ({data.tree.months.mtd})</th><th>Prior ({data.tree.months.prior})</th>
           </tr>
         </thead>
         <tbody>
           {data.tree.groups.map(g => (
             <Fragment key={g.name}>
-              <tr className="grouprow"><td colSpan={data.tree.weeks.length + 5}>{g.name}</td></tr>
+              <tr className="grouprow"><td colSpan={data.tree.weeks.length + 6}>{g.name}</td></tr>
               {g.rows.map(r => {
                 const hasKids = !!r.children?.length;
                 const isOpen = open.has(r.label);
@@ -149,6 +152,35 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
           ))}
         </tbody>
       </table>
+      </div>
+    </>
+  );
+}
+
+function DriverCheck({ drivers }: { drivers: { rows: Driver[]; biggest: number } }) {
+  if (!drivers?.rows?.length) return null;
+  const fmtDrv = (v: number | null, f: Fmt) => fmtVal(v, f);
+  return (
+    <div className="drivercard">
+      <div className="cohorthead"><h3>GMV Driver Check</h3><span className="sub">GMV = Impressions × CTR × CTOR × AOV · this week vs. last week</span></div>
+      <div className="tablecard">
+        <table className="exec drv">
+          <thead><tr><th className="lead">Driver</th><th>This Week</th><th>Last Week</th><th>WoW Δ</th><th>WoW %</th><th>Log Δ (pts)</th></tr></thead>
+          <tbody>
+            {drivers.rows.map((d, i) => (
+              <tr key={d.driver} className={i === drivers.biggest ? 'biggest' : ''}>
+                <td className="lead metric">{d.driver}{i === drivers.biggest && <span className="mover"> ◆ biggest mover</span>}</td>
+                <td className="num strong">{fmtDrv(d.thisWeek, d.fmt)}</td>
+                <td className="num">{fmtDrv(d.lastWeek, d.fmt)}</td>
+                <td className="num" style={{ color: deltaColor(d.wowAbs) }}>{fmtDelta(d.wowAbs, d.fmt)}</td>
+                <td className="num" style={{ color: deltaColor(d.wowPct) }}>{d.wowPct === null ? '—' : (d.wowPct >= 0 ? '+' : '') + (d.wowPct * 100).toFixed(1) + '%'}</td>
+                <td className="num" style={{ color: deltaColor(d.logDelta) }}>{d.logDelta === null ? '—' : (d.logDelta >= 0 ? '+' : '') + d.logDelta.toFixed(1) + ' pts'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="hint">GMV = Impressions × CTR × CTOR × AOV holds exactly. The <b>biggest mover</b> is picked by |Log Δ| (100·ln(this ÷ last)) — log growth is symmetric between a rise and a fall and the four drivers&rsquo; Log Δs sum to GMV&rsquo;s own, so it&rsquo;s more rigorous than raw WoW %.</p>
     </div>
   );
 }

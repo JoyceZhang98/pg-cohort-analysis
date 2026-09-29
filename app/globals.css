@@ -165,3 +165,10 @@ table.dict td { padding: 8px 12px; border-bottom: 1px solid var(--line); vertica
 table.dict td.dm { font-weight: 700; white-space: nowrap; }
 table.dict code { background: var(--chip); padding: 1px 6px; border-radius: 5px; font-size: 11.5px; white-space: normal; }
 .instr .tablecard { margin-bottom: 8px; }
+
+/* ---------- GMV Driver Check ---------- */
+.drivercard { margin-bottom: 30px; }
+table.drv td.lead.metric { font-weight: 700; }
+table.drv tr.biggest td { background: #fff8e6; }
+table.drv .mover { color: #c48a00; font-size: 11px; font-weight: 700; margin-left: 8px; }
+@media (prefers-color-scheme: dark) { table.drv tr.biggest td { background: #2a2410; } table.drv .mover { color: #e0b03a; } }

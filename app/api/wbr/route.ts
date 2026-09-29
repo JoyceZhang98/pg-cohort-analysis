@@ -17,7 +17,7 @@ function mondayOf(d: Date): string {
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
   const brand = p.get('brand') || 'all';
-  const emvV = Number(p.get('emvV') ?? '1.0');
+  const emvV = Number(p.get('emvV') ?? '10.0');
   const emvE = Number(p.get('emvE') ?? '0.3');
 
   let shopIds: string[];

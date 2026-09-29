@@ -26,7 +26,7 @@ export default function Page() {
   const [internalScope, setInternalScope] = useState('all');
   const [week, setWeek] = useState<string | null>(null);
   const [weeks, setWeeks] = useState<string[]>([]);
-  const [emvV, setEmvV] = useState(1.0);
+  const [emvV, setEmvV] = useState(10.0);
   const [emvE, setEmvE] = useState(0.3);
 
   const onMeta = (aw: string[]) => { if (aw.length && weeks.join() !== aw.join()) setWeeks(aw); };
@@ -42,7 +42,7 @@ export default function Page() {
     <>
       <label className="ctl"><span>EMV $/1,000 VIEWS</span>
         <input type="number" step="0.1" value={emvV} onChange={e => setEmvV(Number(e.target.value) || 0)} /></label>
-      <label className="ctl"><span>EMV $/1,000 ENGAGEMENTS</span>
+      <label className="ctl"><span>EMV $ / ENGAGEMENT</span>
         <input type="number" step="0.05" value={emvE} onChange={e => setEmvE(Number(e.target.value) || 0)} /></label>
     </>
   );

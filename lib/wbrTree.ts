@@ -9,11 +9,17 @@ export type Row = {
   wowAbs: number | null;
   wowPct: number | null;
   mtd: number | null;
+  prior: number | null;   // prior-full-month absolute value
   momPct: number | null;
   children?: Row[]; // raw components behind a ratio / composite (drill-down)
 };
 export type Group = { name: string; rows: Row[] };
-export type Tree = { weeks: string[]; groups: Group[]; reportWeek: string };
+export type Driver = { driver: string; fmt: Fmt; thisWeek: number | null; lastWeek: number | null; wowAbs: number | null; wowPct: number | null; logDelta: number | null };
+export type Tree = {
+  weeks: string[]; groups: Group[]; reportWeek: string;
+  months: { mtd: string; prior: string };
+  drivers: { rows: Driver[]; biggest: number };
+};
 
 type Kind = 'flow' | 'rate' | 'snapshot';
 type ValFn = (m: Measures, emvV: number, emvE: number, lifetime: number) => number | null;
@@ -41,12 +47,12 @@ const DEFS: { group: string; items: Def[] }[] = [
         children: [c('GMV', 'money', m => m.gmv), c('Video Views', 'int', m => m.video_views)] },
       { label: 'Ads ROAS (Ads GMV / Ad Spend)', fmt: 'x', kind: 'rate', value: m => rate(m.ad_gmv, m.ad_spend),
         children: [c('Ad GMV', 'money', m => m.ad_gmv), c('Ad Spend', 'money', m => m.ad_spend)] },
-      { label: 'EMV (Earned Media Value)', fmt: 'money', kind: 'flow', value: (m, ev, ee) => (m.video_views / 1000) * ev + ((m.likes + m.comments + m.shares) / 1000) * ee,
+      { label: 'EMV (Earned Media Value)', fmt: 'money', kind: 'flow', value: (m, ev, ee) => (m.video_views / 1000) * ev + (m.likes + m.comments + m.shares) * ee,
         children: [
           c('Video Views', 'int', m => m.video_views),
           c('Engagements (Likes+Comments+Shares)', 'int', m => m.likes + m.comments + m.shares),
           c('Views $ component', 'money', (m, ev) => (m.video_views / 1000) * ev),
-          c('Engagement $ component', 'money', (m, _ev, ee) => ((m.likes + m.comments + m.shares) / 1000) * ee),
+          c('Engagement $ component', 'money', (m, _ev, ee) => (m.likes + m.comments + m.shares) * ee),
         ] },
       { label: 'Active Creators (Creators Posting)', fmt: 'int', kind: 'flow', value: m => m.active_creators },
       { label: 'Lifetime Creators', fmt: 'int', kind: 'snapshot', value: (_m, _v, _e, lifetime) => lifetime },
@@ -148,9 +154,30 @@ export function buildTree(
     return {
       label: '', fmt, inverse, weekly,
       wowAbs: cur !== null && prev !== null ? cur - prev : null,
-      wowPct: pctDelta(cur, prev), mtd, momPct: pctDelta(mtd, prior),
+      wowPct: pctDelta(cur, prev), mtd, prior, momPct: pctDelta(mtd, prior),
     };
   };
+
+  // GMV Driver Check — GMV = Impressions × CTR × CTOR × AOV, report week vs prior week
+  const reportWk = series.get(reportWeek);
+  const prevWk = series.get(trailing[trailing.length - 2]);
+  const driverDefs: { driver: string; fmt: Fmt; f: (m: Measures) => number | null }[] = [
+    { driver: 'Impressions', fmt: 'int', f: m => m.impressions },
+    { driver: 'CTR', fmt: 'pct', f: m => rate(m.page_views, m.impressions) },
+    { driver: 'CTOR', fmt: 'pct', f: m => rate(m.orders, m.page_views) },
+    { driver: 'AOV', fmt: 'money', f: m => rate(m.gmv, m.orders) },
+  ];
+  const driverRows: Driver[] = driverDefs.map(d => {
+    const t = reportWk ? d.f(reportWk) : null;
+    const l = prevWk ? d.f(prevWk) : null;
+    const logDelta = t !== null && l !== null && t > 0 && l > 0 ? 100 * Math.log(t / l) : null;
+    return { driver: d.driver, fmt: d.fmt, thisWeek: t, lastWeek: l, wowAbs: t !== null && l !== null ? t - l : null, wowPct: pctDelta(t, l), logDelta };
+  });
+  let biggest = -1, biggestMag = -1;
+  driverRows.forEach((r, i) => { if (r.logDelta !== null && Math.abs(r.logDelta) > biggestMag) { biggestMag = Math.abs(r.logDelta); biggest = i; } });
+
+  const shortMonth = (mondayKey: string) => new Date(mondayKey + 'T00:00:00Z').toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+  const months = { mtd: shortMonth(reportWeek), prior: shortMonth(priorWeeks[0] ?? mondaysEndingAt(reportWeek, 6)[0]) };
 
   const groups: Group[] = DEFS.map(g => ({
     name: g.group,
@@ -162,5 +189,5 @@ export function buildTree(
     }),
   }));
 
-  return { weeks: trailing, groups, reportWeek };
+  return { weeks: trailing, groups, reportWeek, months, drivers: { rows: driverRows, biggest } };
 }
