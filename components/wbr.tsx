@@ -96,9 +96,11 @@ export function Spark({ values, inverse }: { values: (number | null)[]; inverse?
   const w = 72, h = 26, pad = 3;
   const step = (w - pad * 2) / (pts.length - 1);
   const path = pts.map((v, i) => `${pad + i * step},${h - pad - ((v - min) / rng) * (h - pad * 2)}`).join(' ');
-  const rising = pts[pts.length - 1] >= pts[0];
-  const good = inverse ? !rising : rising;
-  const color = good ? 'var(--up)' : 'var(--down)';
+  // Color by the most recent week-over-week move (last vs. prior point) so the trend line's
+  // color always agrees with the WoW Δ / % columns — not first-vs-last, which the low ramp-up
+  // week skewed green. Matches deltaColor(wowAbs, inverse) exactly, incl. flat = muted.
+  const wow = pts[pts.length - 1] - pts[pts.length - 2];
+  const color = wow === 0 ? 'var(--muted)' : (inverse ? wow < 0 : wow > 0) ? 'var(--up)' : 'var(--down)';
   const last = path.split(' ').pop()!.split(',').map(Number);
   return (
     <svg width={w} height={h} style={{ display: 'block' }}>
