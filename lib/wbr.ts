@@ -1,6 +1,8 @@
 import { pool } from './db';
 import { supaPool } from './supa';
 
+export let lastSupaError = ''; // temporary diagnostic
+
 // ---------- Weekly metrics engine for the WBR ----------
 // Everything is bucketed into Monday-start weeks (Postgres date_trunc('week')).
 // A week belongs to the month its Monday falls in (matches the template rule),
@@ -192,8 +194,11 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
       for (const r of sps.rows) bump(r.wk, m => { m.sps = n(r.sps); });
       for (const r of l3.rows) bump(r.wk, m => { m.new_l3_videos += n(r.new_l3); m.active_l3_creators += n(r.active_l3); m.l3_total_videos += n(r.total); });
     } catch (e) {
-      console.error('Supabase fetch failed (SPS/L3+ will be blank):', (e as Error).message);
+      lastSupaError = (e as Error).message;
+      console.error('Supabase fetch failed (SPS/L3+ will be blank):', lastSupaError);
     }
+  } else if (!sp && supaNames.length) {
+    lastSupaError = 'SUPABASE_DB_URL not set';
   }
 
   return series;
