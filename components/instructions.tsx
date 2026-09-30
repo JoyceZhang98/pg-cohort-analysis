@@ -66,7 +66,7 @@ const TREE: { group: string; rows: Def[] }[] = [
       ['Samples Applied', 'sample.created_at', 'count of samples created in the period'],
       ['Samples Approved', "sample_activity.new_status = 'AWAITING_SHIPMENT'", 'distinct samples reaching that status'],
       ['Samples Sent (Delivered)', "sample_activity.new_status = 'SHIPPED'", 'distinct samples reaching that status'],
-      ['Target Plan Sends', 'target_collaboration_creator ⋈ target_collaboration.shop_id', 'creators invited via targeted collaborations in the period'],
+      ['Target Plan Invite Sent', 'target_collaboration_creator ⋈ target_collaboration.shop_id', 'creators invited via targeted collaborations in the period'],
       ['Email Outreach', '— (external, source pending)', 'placeholder — email-outreach sends not yet wired'],
     ],
   },

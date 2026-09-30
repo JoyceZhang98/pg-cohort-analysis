@@ -39,7 +39,7 @@ export const DEFINITIONS: Record<string, string> = {
   'Samples Applied': 'Sample requests created in the week.',
   'Samples Approved': 'Samples advanced to AWAITING_SHIPMENT.',
   'Samples Sent (Delivered)': 'Samples advanced to SHIPPED.',
-  'Target Plan Sends (not de-duped)': 'Total targeted-collaboration invites sent (target_collaboration_creator rows, not de-duped by creator).',
+  'Target Plan Invite Sent': 'Total targeted-collaboration invites sent (target_collaboration_creator rows, not de-duped by creator).',
   'Email Outreach': 'External: email-outreach sends. Source pending.',
 };
 

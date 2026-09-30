@@ -161,7 +161,7 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
   {
     group: 'INTERNAL OPERATIONS VIEW — sample funnel',
     items: [
-      { label: 'Target Plan Sends (not de-duped)', fmt: 'int', kind: 'flow', value: m => m.target_plan_sends },
+      { label: 'Target Plan Invite Sent', fmt: 'int', kind: 'flow', value: m => m.target_plan_sends },
       ext('Email Outreach', 'int'),
       { label: 'Samples Applied', fmt: 'int', kind: 'flow', value: m => m.samples_applied },
       { label: 'Samples Approved', fmt: 'int', kind: 'flow', value: m => m.samples_approved },
