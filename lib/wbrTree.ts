@@ -42,9 +42,9 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
     items: [
       { label: 'GMV with Subsidies', fmt: 'money', kind: 'flow', value: m => m.gmv + m.subsidy,
         children: [c('GMV', 'money', m => m.gmv), c('TikTok Subsidy', 'money', m => m.subsidy_tiktok), c('Seller Subsidy', 'money', m => m.subsidy_seller)] },
+      { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', value: m => rate(m.subsidy_tiktok, m.gmv + m.subsidy) },
       { label: 'GMV', fmt: 'money', kind: 'flow', value: m => m.gmv,
         children: [c('Video GMV %', 'pct', m => rate(m.video_gmv, m.gmv)), c('Product-Card GMV %', 'pct', m => rate(m.card_gmv, m.gmv)), c('Live GMV %', 'pct', m => rate(m.live_gmv, m.gmv))] },
-      { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', value: m => rate(m.subsidy_tiktok, m.gmv + m.subsidy) },
       { label: 'Affiliate GMV', fmt: 'money', kind: 'flow', value: m => m.affiliate_gmv,
         children: [
           c('Open Plan %', 'pct', m => rate(m.aff_gmv_open, m.affiliate_gmv)),
@@ -76,7 +76,7 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
     group: 'CREATORS & CUSTOMERS', super: 'HEADLINE',
     items: [
       { label: 'Lifetime Creators', fmt: 'int', kind: 'snapshot', value: (_m, _v, _e, lifetime) => lifetime,
-        children: [xc('Lifetime L3+ Creators', 'int')] },
+        children: [c('Lifetime L3+ Creators', 'int', (_m, _v, _e, lt) => lt)] },
       { label: 'Total Customers', fmt: 'int', kind: 'flow', value: m => m.customers,
         children: [c('New Customers', 'int', m => m.new_customers), c('Returning Customers', 'int', m => m.returning_customers)] },
     ],
@@ -87,7 +87,7 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
       { label: 'Impressions', fmt: 'int', kind: 'flow', value: m => m.impressions,
         children: [c('Video Impressions', 'int', m => m.video_impr), c('Shop-Tab Impressions', 'int', m => m.card_impr), c('LIVE Impressions', 'int', m => m.live_impr)] },
       { label: 'Video Views', fmt: 'int', kind: 'flow', value: m => m.video_views,
-        children: [xc('L3+ Affiliate Video Views', 'int')] },
+        children: [c('L3+ Affiliate Video Views', 'int', m => m.l3_video_views || null)] },
       { label: 'New Affiliate Videos', fmt: 'int', kind: 'flow', value: m => m.new_videos,
         children: [c('Active Creators (Creators Posting)', 'int', m => m.active_creators)] },
       { label: 'New L3+ Affiliate Videos', fmt: 'int', kind: 'flow', value: m => m.new_l3_videos,
@@ -95,7 +95,8 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
       { label: '% of Videos from L3+', fmt: 'pct', kind: 'rate', value: m => rate(m.new_l3_videos, m.l3_total_videos) },
       { label: 'Avg Views per Affiliate Video', fmt: 'int', kind: 'rate', value: m => rate(m.video_views, m.videos_with_views),
         children: [c('Video Views', 'int', m => m.video_views), c('Unique Affiliate Videos (with views)', 'int', m => m.videos_with_views)] },
-      ext('Avg Views per L3+ Affiliate Video', 'int'),
+      { label: 'Avg Views per L3+ Affiliate Video', fmt: 'int', kind: 'rate', value: m => rate(m.l3_video_views, m.l3_videos_with_views),
+        children: [c('L3+ Video Views', 'int', m => m.l3_video_views || null), c('Unique L3+ Videos (with views)', 'int', m => m.l3_videos_with_views || null)] },
       { label: 'Ad Spend', fmt: 'money', kind: 'flow', value: m => m.ad_spend,
         children: [
           c('Creatives — Learning', 'int', m => m.cd_learning),
@@ -173,7 +174,7 @@ const pctDelta = (a: number | null, b: number | null) => (a === null || b === nu
 export function buildTree(
   series: Map<string, Measures>, lifetimeByWeek: Record<string, number>,
   reportWeek: string, emvV: number, emvE: number, monthGoal = 0,
-  goals: Record<string, number> = {},
+  goals: Record<string, number> = {}, l3LifetimeByWeek: Record<string, number> = {},
 ): Tree {
   // Only show a week column once all 7 of its days have fully elapsed (no partial weeks).
   const todayMs = Date.now();
@@ -185,17 +186,17 @@ export function buildTree(
   const mtdWeeks = span.filter(w => monthOf(w) === repMonth && w <= reportWeek);
   const priorWeeks = span.filter(w => monthOf(w) === priorMonth);
 
-  const compute = (value: ValFn, kind: Kind, inverse?: boolean, fmt: Fmt = 'int'): Row => {
+  const compute = (value: ValFn, kind: Kind, inverse?: boolean, fmt: Fmt = 'int', lifeMap: Record<string, number> = lifetimeByWeek): Row => {
     const periodVal = (weeks: string[]): number | null => {
       if (!weeks.length) return null;
       const last = weeks[weeks.length - 1];
-      if (kind === 'snapshot') { const m = series.get(last); return m ? value(m, emvV, emvE, lifetimeByWeek[last] ?? 0) : null; }
-      return value(sumWeeks(series, weeks), emvV, emvE, lifetimeByWeek[last] ?? 0);
+      if (kind === 'snapshot') { const m = series.get(last); return m ? value(m, emvV, emvE, lifeMap[last] ?? 0) : null; }
+      return value(sumWeeks(series, weeks), emvV, emvE, lifeMap[last] ?? 0);
     };
     const weekVal = (wk: string): number | null => {
       const m = series.get(wk);
       if (!m && kind !== 'snapshot') return null;
-      return value(m ?? ({} as Measures), emvV, emvE, lifetimeByWeek[wk] ?? 0);
+      return value(m ?? ({} as Measures), emvV, emvE, lifeMap[wk] ?? 0);
     };
     const weekly = trailing.map(w => (series.has(w) || kind === 'snapshot' ? weekVal(w) : null));
     const cur = weekly[weekly.length - 1], prev = weekly[weekly.length - 2];
@@ -248,7 +249,13 @@ export function buildTree(
       const bench = goals[def.label];
       if (bench != null && bench > 0) { row.goal = bench; row.goalAttain = row.mtd !== null ? row.mtd / bench : null; }
       else if (def.label === 'GMV' && monthGoal > 0) { row.goal = monthGoal; row.goalAttain = row.mtd !== null ? row.mtd / monthGoal : null; }
-      if (def.children) row.children = def.children.map(ch => { const r = compute(ch.value, 'flow', false, ch.fmt); r.label = ch.label; r.external = ch.external; return r; });
+      if (def.children) row.children = def.children.map(ch => {
+        // Lifetime L3+ Creators is a cumulative snapshot fed by the L3+ lifetime map (not a weekly sum).
+        const r = ch.label === 'Lifetime L3+ Creators'
+          ? compute((_m, _v, _e, lt) => lt, 'snapshot', false, ch.fmt, l3LifetimeByWeek)
+          : compute(ch.value, 'flow', false, ch.fmt);
+        r.label = ch.label; r.external = ch.external; return r;
+      });
       return row;
     }),
   }));

@@ -23,6 +23,7 @@ export const DEFINITIONS: Record<string, string> = {
   'New L3+ Affiliate Videos': 'New videos from L3+ (higher-tier) creators.',
   '% of Videos from L3+': 'New L3+ videos ÷ all new videos.',
   'Avg Views per Affiliate Video': "That week's total affiliate video views ÷ the number of unique affiliate videos that had views that week.",
+  'Avg Views per L3+ Affiliate Video': "L3+ creators' video views ÷ their unique videos with views that week. L3+ creators are matched from Supabase (daily_newvideo_creatorlevel) to TimescaleDB affiliates by handle.",
   'Ad Spend': 'GMV Max ad cost (gmv_max_campaign_stat_daily.cost). Drill-down: distinct creatives in Learning vs Delivering each week (gmv_max_creative_stat_daily.creative_delivery_status, each creative counted by its latest status that week).',
   'Total Clicks': 'Product clicks (page views) across Video, Shop-Tab, and LIVE.',
   'Orders': 'Orders from product_stat_rich_daily.',

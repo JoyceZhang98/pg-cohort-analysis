@@ -1,5 +1,5 @@
 import { pool } from './db';
-import { supaConfigured, supaRpc } from './supa';
+import { supaConfigured, supaRpc, supaL3Handles } from './supa';
 
 
 // ---------- Weekly metrics engine for the WBR ----------
@@ -58,6 +58,8 @@ export type Measures = {
   new_l3_videos: number;    // new videos by L3+ creators
   active_l3_creators: number;
   l3_total_videos: number;  // all new videos (denominator for % from L3+)
+  l3_video_views: number;       // views on L3+ creators' videos (TimescaleDB, attributed via handle match)
+  l3_videos_with_views: number; // distinct L3+ videos with views that week
 };
 
 const ZERO: Measures = {
@@ -73,6 +75,7 @@ const ZERO: Measures = {
   cd_auth_needed: 0, cd_not_active: 0, cd_unavailable: 0, cd_excluded: 0, cd_rejected: 0,
   skus_live: 0, skus_oos: 0, instock_num: 0, instock_den: 0,
   sps: 0, new_l3_videos: 0, active_l3_creators: 0, l3_total_videos: 0,
+  l3_video_views: 0, l3_videos_with_views: 0,
 };
 
 const WEEKS_BACK = 16;
@@ -81,6 +84,8 @@ const WEEKS_BACK = 16;
 // supaNames = matching Supabase brand_name keys (for SPS + L3+ metrics; best-effort).
 export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): Promise<Map<string, Measures>> {
   const s = shopIds;
+  const _l3h = await supaL3Handles(supaNames);
+  const l3h = _l3h.length ? _l3h : [' ']; // non-empty so any($2) is valid (matches nothing)
   const series = new Map<string, Measures>();
   const bump = (wk: string, f: (m: Measures) => void) => {
     let m = series.get(wk);
@@ -161,10 +166,13 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
     pool.query(
       `select to_char(date_trunc('week', vsd.date),'YYYY-MM-DD') wk,
          sum(vsd.views) views, sum(vsd.likes) likes, sum(vsd.comments) comments, sum(vsd.shares) shares,
-         count(distinct vsd.video_id) videos_with_views
+         count(distinct vsd.video_id) videos_with_views,
+         sum(vsd.views) filter (where lower(af.username) = any($2)) l3_views,
+         count(distinct vsd.video_id) filter (where lower(af.username) = any($2)) l3_vids
        from video_stat_rich_daily vsd join video v on v.id = vsd.video_id
+         left join affiliate af on af.id = v.affiliate_id
        where v.shop_id = any($1) and vsd.date >= ${since}
-       group by 1`, [s]),
+       group by 1`, [s, l3h]),
     pool.query(
       `select to_char(date_trunc('week', r.create_time),'YYYY-MM-DD') wk, sum(r.refund_subtotal) refund_gmv
        from "return" r where r.shop_id = any($1) and r.create_time >= ${since}
@@ -248,7 +256,7 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
   for (const r of aff.rows) bump(r.wk, m => { m.affiliate_gmv += n(r.aff_gmv); m.aff_gmv_open += n(r.aff_open); m.aff_gmv_target += n(r.aff_target); m.aff_gmv_tap += n(r.aff_tap); });
   for (const r of adv.rows) bump(r.wk, m => { m.ad_spend += n(r.ad_spend); m.ad_gmv += n(r.ad_gmv); });
   for (const r of vid.rows) bump(r.wk, m => { m.new_videos += n(r.new_videos); });
-  for (const r of vsd.rows) bump(r.wk, m => { m.video_views += n(r.views); m.likes += n(r.likes); m.comments += n(r.comments); m.shares += n(r.shares); m.videos_with_views += n(r.videos_with_views); });
+  for (const r of vsd.rows) bump(r.wk, m => { m.video_views += n(r.views); m.likes += n(r.likes); m.comments += n(r.comments); m.shares += n(r.shares); m.videos_with_views += n(r.videos_with_views); m.l3_video_views += n(r.l3_views); m.l3_videos_with_views += n(r.l3_vids); });
   for (const r of ret.rows) bump(r.wk, m => { m.refund_gmv += n(r.refund_gmv); });
   for (const r of smp.rows) bump(r.wk, m => { m.samples_applied += n(r.applied); });
   for (const r of smpAppr.rows) bump(r.wk, m => { m.samples_approved += n(r.approved); });
@@ -293,18 +301,24 @@ export async function fetchMonthGoal(supaNames: string[], reportMonth: string): 
 }
 
 // Lifetime creators (cumulative distinct posting affiliates) at each week-end.
-export async function fetchLifetimeCreators(shopIds: string[], weekMondays: string[]): Promise<Record<string, number>> {
-  const { rows } = await pool.query<{ affiliate_id: string; first: string }>(
-    `select affiliate_id, min(video_post_time)::date first
-     from video where shop_id = any($1) and affiliate_id is not null and video_post_time is not null
-     group by 1`, [shopIds]);
-  const firsts = rows.map(r => new Date(r.first).getTime());
-  const out: Record<string, number> = {};
+// Returns { all, l3 } — l3 counts only affiliates whose username is in the L3+ handle set.
+export async function fetchLifetimeCreators(
+  shopIds: string[], weekMondays: string[], l3Handles: string[] = [],
+): Promise<{ all: Record<string, number>; l3: Record<string, number> }> {
+  const { rows } = await pool.query<{ first: string; username: string | null }>(
+    `select min(v.video_post_time)::date first, lower(af.username) username
+     from video v left join affiliate af on af.id = v.affiliate_id
+     where v.shop_id = any($1) and v.affiliate_id is not null and v.video_post_time is not null
+     group by v.affiliate_id, lower(af.username)`, [shopIds]);
+  const l3set = new Set(l3Handles);
+  const firsts = rows.map(r => ({ t: new Date(r.first).getTime(), l3: !!r.username && l3set.has(r.username) }));
+  const all: Record<string, number> = {}, l3: Record<string, number> = {};
   for (const wk of weekMondays) {
     const end = new Date(wk).getTime() + 7 * 864e5; // through end of that week
-    out[wk] = firsts.filter(t => t <= end).length;
+    all[wk] = firsts.filter(f => f.t <= end).length;
+    l3[wk] = firsts.filter(f => f.t <= end && f.l3).length;
   }
-  return out;
+  return { all, l3 };
 }
 
 // Sum a subset of weekly measures over the given week keys.
