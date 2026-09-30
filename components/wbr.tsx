@@ -243,13 +243,13 @@ function DriverCheck({ drivers, weeks }: { drivers: { total: Driver | null; rows
       <div className="drformula">GMV = Impressions × CTR × CTOR × AOV</div>
       <div className="tablecard">
         <table className="exec drv">
-          <thead><tr><th className="lead">Driver</th><th>{thisWk}</th><th>{lastWk}</th><th>WoW Δ</th><th>WoW %</th><th>Log Δ (pts)</th></tr></thead>
+          <thead><tr><th className="lead">Driver</th><th>{lastWk}</th><th>{thisWk}</th><th>WoW Δ</th><th>WoW %</th><th>Log Δ (pts)</th></tr></thead>
           <tbody>
             {drivers.total && (
               <tr className="drvtotal">
                 <td className="lead metric strong">{drivers.total.driver}</td>
-                <td className="num strong">{fmtDrv(drivers.total.thisWeek, drivers.total.fmt)}</td>
                 <td className="num">{fmtDrv(drivers.total.lastWeek, drivers.total.fmt)}</td>
+                <td className="num strong">{fmtDrv(drivers.total.thisWeek, drivers.total.fmt)}</td>
                 <td className="num" style={{ color: deltaColor(drivers.total.wowAbs) }}>{fmtDelta(drivers.total.wowAbs, drivers.total.fmt)}</td>
                 <td className="num" style={{ color: deltaColor(drivers.total.wowPct) }}>{drivers.total.wowPct === null ? '—' : (drivers.total.wowPct >= 0 ? '+' : '') + (drivers.total.wowPct * 100).toFixed(1) + '%'}</td>
                 <td className="num" style={{ color: deltaColor(drivers.total.logDelta) }}>{drivers.total.logDelta === null ? '—' : (drivers.total.logDelta >= 0 ? '+' : '') + drivers.total.logDelta.toFixed(1) + ' pts'}</td>
@@ -259,8 +259,8 @@ function DriverCheck({ drivers, weeks }: { drivers: { total: Driver | null; rows
             {drivers.rows.map((d, i) => (
               <tr key={d.driver} className={i === drivers.biggest ? 'biggest' : ''}>
                 <td className="lead metric">{d.driver}{i === drivers.biggest && <span className="mover"> ◆ biggest mover</span>}</td>
-                <td className="num strong">{fmtDrv(d.thisWeek, d.fmt)}</td>
                 <td className="num">{fmtDrv(d.lastWeek, d.fmt)}</td>
+                <td className="num strong">{fmtDrv(d.thisWeek, d.fmt)}</td>
                 <td className="num" style={{ color: deltaColor(d.wowAbs) }}>{fmtDelta(d.wowAbs, d.fmt)}</td>
                 <td className="num" style={{ color: deltaColor(d.wowPct) }}>{d.wowPct === null ? '—' : (d.wowPct >= 0 ? '+' : '') + (d.wowPct * 100).toFixed(1) + '%'}</td>
                 <td className="num" style={{ color: deltaColor(d.logDelta) }}>{d.logDelta === null ? '—' : (d.logDelta >= 0 ? '+' : '') + d.logDelta.toFixed(1) + ' pts'}</td>
@@ -273,8 +273,8 @@ function DriverCheck({ drivers, weeks }: { drivers: { total: Driver | null; rows
                 {drivers.extra.map(d => (
                   <tr key={d.driver}>
                     <td className="lead metric">{d.driver}</td>
-                    <td className="num strong">{fmtDrv(d.thisWeek, d.fmt)}</td>
                     <td className="num">{fmtDrv(d.lastWeek, d.fmt)}</td>
+                    <td className="num strong">{fmtDrv(d.thisWeek, d.fmt)}</td>
                     <td className="num" style={{ color: deltaColor(d.wowAbs) }}>{fmtDelta(d.wowAbs, d.fmt)}</td>
                     <td className="num" style={{ color: deltaColor(d.wowPct) }}>{d.wowPct === null ? '—' : (d.wowPct >= 0 ? '+' : '') + (d.wowPct * 100).toFixed(1) + '%'}</td>
                     <td className="num">—</td>

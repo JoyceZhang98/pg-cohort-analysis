@@ -145,7 +145,7 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
     ],
   },
   {
-    group: 'AVAILABILITY — can we actually fulfil the demand?',
+    group: 'AVAILABILITY — can we actually fulfill the demand?',
     items: [
       { label: 'Unit-Weighted In-Stock Rate', fmt: 'pct', kind: 'rate', value: m => rate(m.instock_num, m.instock_den),
         children: [
