@@ -93,8 +93,8 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
       { label: 'New L3+ Affiliate Videos', fmt: 'int', kind: 'flow', value: m => m.new_l3_videos,
         children: [c('Active L3+ Creators', 'int', m => m.active_l3_creators)] },
       { label: '% of Videos from L3+', fmt: 'pct', kind: 'rate', value: m => rate(m.new_l3_videos, m.l3_total_videos) },
-      { label: 'Avg Views per Affiliate Video', fmt: 'int', kind: 'rate', value: m => rate(m.video_views, m.new_videos),
-        children: [c('Video Views', 'int', m => m.video_views), c('New Affiliate Videos', 'int', m => m.new_videos)] },
+      { label: 'Avg Views per Affiliate Video', fmt: 'int', kind: 'rate', value: m => rate(m.video_views, m.videos_with_views),
+        children: [c('Video Views', 'int', m => m.video_views), c('Unique Affiliate Videos (with views)', 'int', m => m.videos_with_views)] },
       ext('Avg Views per L3+ Affiliate Video', 'int'),
       { label: 'Ad Spend', fmt: 'money', kind: 'flow', inverse: true, value: m => m.ad_spend,
         children: [

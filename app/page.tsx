@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MetricTree, ExecSummary, Funnel, AdsByProduct, Info } from '@/components/wbr';
+import { MetricTree, ExecSummary, Funnel, AdsByProduct, Benchmark, Info } from '@/components/wbr';
 import { Cohort } from '@/components/cohort';
 import { Instructions } from '@/components/instructions';
 
@@ -12,11 +12,12 @@ const BRANDS = [
   { slug: 'secret', label: 'Secret' },
   { slug: 'old-spice', label: 'Old Spice' },
 ];
-type Tab = 'instructions' | 'exec' | 'brand' | 'internal';
+type Tab = 'instructions' | 'exec' | 'brand' | 'benchmark' | 'internal';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'instructions', label: 'Instructions' },
   { id: 'exec', label: 'Executive Summary' },
   { id: 'brand', label: 'Brand Dashboard' },
+  { id: 'benchmark', label: 'Benchmark' },
   { id: 'internal', label: 'Internal Dashboard' },
 ];
 const wkLabel = (k: string) => {
@@ -86,6 +87,20 @@ export default function Page() {
             <EmvInputs />
           </div>
           <MetricTree brand={brand} week={week} emvV={emvV} emvE={emvE} onMeta={onMeta} />
+        </section>
+      )}
+
+      {tab === 'benchmark' && (
+        <section>
+          <p className="sub">Last-30-day actuals vs the brand&rsquo;s category · tier benchmark. The tier = the GMV band last month fell into, plus one.</p>
+          <div className="controls">
+            <label className="ctl"><span>BRAND</span>
+              <select value={brand} onChange={e => setBrand(e.target.value)}>
+                {BRANDS.map(b => <option key={b.slug} value={b.slug}>{b.label}</option>)}
+              </select>
+            </label>
+          </div>
+          <Benchmark brand={brand} />
         </section>
       )}
 

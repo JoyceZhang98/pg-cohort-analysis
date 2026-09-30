@@ -1,6 +1,8 @@
 import { fetchWeekly, fetchLifetimeCreators, fetchMonthGoal, Measures } from './wbr';
 import { buildTree, mondaysEndingAt } from './wbrTree';
 import { BRANDS, brandBySlug } from './brands';
+import { pool } from './db';
+import { benchmarkTier, benchmarkValue, Tier, Category } from './benchmark';
 
 // Monday (UTC) of the week containing `d`.
 function mondayOf(d: Date): string {
@@ -106,5 +108,108 @@ export async function computeExecView(
     reportWeek, availableWeeks: complete.slice(-10).reverse(),
     metrics: EXEC_METRICS.map(m => ({ key: m.key, label: m.label, fmt: m.fmt })),
     rows: [...brandRows, totalRow], generatedAt: new Date().toISOString(),
+  };
+}
+
+// ---------- Benchmark view (TrendVision-style: ACTUAL vs category×tier benchmark) ----------
+export type BenchmarkRow = {
+  measure: string; fmt: 'money' | 'int' | 'pct' | 'ratio'; inverse: boolean;
+  actual: number | null; benchmark: number | null; gap: number | null; attainment: number | null;
+};
+export type BenchmarkView = {
+  brand: string; slug: string; category: Category; tier: Tier;
+  lastMonthGmv: number; lastMonthLabel: string; rows: BenchmarkRow[]; generatedAt: string;
+};
+
+type BAgg = {
+  gmv: number; orders: number; pv: number; impr: number; aff_gmv: number;
+  creator: number; seller: number; ad_spend: number; samples: number;
+  cart_adds: number; cart_orders: number; last_month_gmv: number;
+};
+
+const num = (x: unknown) => Number(x) || 0;
+
+// Rolling-30-day (L30D) actuals for one shop, resilient to a slow/locked query (allSettled).
+async function fetchBenchmarkActuals(shopId: string): Promise<BAgg> {
+  const s = [shopId];
+  const L30 = `current_date - interval '30 days'`;
+  const settled = await Promise.allSettled([
+    pool.query(`select coalesce(sum(psd.gmv),0) gmv, coalesce(sum(psd.orders),0) orders,
+        coalesce(sum(psd.page_views),0) pv, coalesce(sum(psd.impressions),0) impr
+      from product_stat_rich_daily psd join product p on p.id=psd.product_id
+      where p.shop_id=any($1) and psd.date >= ${L30}`, [s]),
+    pool.query(`select count(*) filter (where affiliate_id is not null) creator,
+        count(*) filter (where affiliate_id is null) seller
+      from video where shop_id=any($1) and video_post_time >= ${L30}`, [s]),
+    pool.query(`select coalesce(sum(price_amount*coalesce(quantity,1)),0) aff_gmv
+      from affiliate_order where shop_id=any($1) and create_time >= ${L30}`, [s]),
+    pool.query(`select coalesce(sum(gs.cost),0) ad_spend
+      from gmv_max_campaign_stat_daily gs join gmv_max_campaign gc on gc.id=gs.campaign_id
+      where gc.shop_id=any($1) and gs.date >= ${L30}`, [s]),
+    pool.query(`select count(distinct sa.sample_id) samples
+      from sample_activity sa join sample sm on sm.id=sa.sample_id
+      where sm.shop_id=any($1) and sa.new_status='SHIPPED' and to_timestamp(sa.event_timestamp) >= ${L30}`, [s]),
+    pool.query(`select coalesce(sum(ps.add_to_cart_count),0) cart_adds, coalesce(sum(ps.sku_orders),0) cart_orders
+      from product_live_stat_rich_daily ps join product p on p.id=ps.product_id
+      where p.shop_id=any($1) and ps.date >= ${L30}`, [s]),
+    // last full calendar month GMV → drives the benchmark tier
+    pool.query(`select coalesce(sum(psd.gmv),0) g from product_stat_rich_daily psd join product p on p.id=psd.product_id
+      where p.shop_id=any($1) and psd.date >= date_trunc('month', current_date) - interval '1 month'
+        and psd.date < date_trunc('month', current_date)`, [s]),
+  ]);
+  settled.forEach((x, i) => { if (x.status === 'rejected') console.error(`[benchmark] actual query #${i} failed:`, (x.reason as Error)?.message); });
+  const r = settled.map(x => (x.status === 'fulfilled' ? x.value.rows[0] : {}) as Record<string, unknown>);
+  return {
+    gmv: num(r[0].gmv), orders: num(r[0].orders), pv: num(r[0].pv), impr: num(r[0].impr),
+    creator: num(r[1].creator), seller: num(r[1].seller), aff_gmv: num(r[2].aff_gmv),
+    ad_spend: num(r[3].ad_spend), samples: num(r[4].samples),
+    cart_adds: num(r[5].cart_adds), cart_orders: num(r[5].cart_orders), last_month_gmv: num(r[6].g),
+  };
+}
+
+const rate2 = (n: number, d: number) => (d ? n / d : null);
+const BM_MEASURES: { measure: string; fmt: 'money' | 'int' | 'pct' | 'ratio'; inverse?: boolean; f: (a: BAgg) => number | null }[] = [
+  { measure: 'GMV (L30D)', fmt: 'money', f: a => a.gmv },
+  { measure: 'Hero Products', fmt: 'int', f: () => null }, // filled from a separate rolling-30d hero query below
+  { measure: 'Seller Contents', fmt: 'int', f: a => a.seller },
+  { measure: 'Affiliate GMV%', fmt: 'pct', f: a => rate2(a.aff_gmv, a.gmv) },
+  { measure: 'Creator Contents', fmt: 'int', f: a => a.creator },
+  { measure: 'Product CTR', fmt: 'pct', f: a => rate2(a.pv, a.impr) },
+  { measure: 'C_O (SKU Order)', fmt: 'pct', f: a => rate2(a.orders, a.pv) }, // click→order (benchmark ~2-3%, matches this not cart→order)
+  { measure: 'Free Samples Delivered', fmt: 'int', f: a => a.samples },
+  { measure: 'Ads Investment', fmt: 'money', f: a => a.ad_spend },
+  { measure: 'Ads % GMV', fmt: 'pct', inverse: true, f: a => rate2(a.ad_spend, a.gmv) },
+];
+
+async function fetchHero30d(shopId: string): Promise<number | null> {
+  try {
+    const { rows } = await pool.query<{ hero: string }>(
+      `select count(*) hero from (
+         select psd.product_id from product_stat_rich_daily psd join product p on p.id=psd.product_id
+         where p.shop_id=$1 and psd.date >= current_date - interval '30 days'
+         group by psd.product_id having sum(psd.gmv) >= 30000 or sum(psd.orders) >= 1000) h`, [shopId]);
+    return num(rows[0]?.hero);
+  } catch { return null; }
+}
+
+export async function computeBenchmarkView(slug: string): Promise<BenchmarkView | { error: string }> {
+  const b = brandBySlug(slug);
+  if (!b) return { error: 'unknown brand' };
+  const [agg, hero] = await Promise.all([fetchBenchmarkActuals(b.shopId), fetchHero30d(b.shopId)]);
+  const tier = benchmarkTier(b.category, agg.last_month_gmv);
+  const lastMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1));
+  const lastMonthLabel = lastMonth.toLocaleString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+  const rows: BenchmarkRow[] = BM_MEASURES.map(m => {
+    const actual = m.measure === 'Hero Products' ? hero : m.f(agg);
+    const benchmark = benchmarkValue(b.category, m.measure, tier);
+    const gap = actual !== null && benchmark !== null ? actual - benchmark : null;
+    const attainment = actual !== null && benchmark ? actual / benchmark : null;
+    return { measure: m.measure, fmt: m.fmt, inverse: !!m.inverse, actual, benchmark, gap, attainment };
+  });
+
+  return {
+    brand: b.label, slug, category: b.category, tier,
+    lastMonthGmv: agg.last_month_gmv, lastMonthLabel, rows, generatedAt: new Date().toISOString(),
   };
 }

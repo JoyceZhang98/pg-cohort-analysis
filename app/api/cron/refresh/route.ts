@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchWeekly, Measures } from '@/lib/wbr';
-import { computeBrandView, computeExecView } from '@/lib/views';
+import { computeBrandView, computeExecView, computeBenchmarkView } from '@/lib/views';
 import { cacheSet } from '@/lib/cache';
 import { BRANDS } from '@/lib/brands';
 
@@ -95,6 +95,15 @@ export async function GET(req: NextRequest) {
     } else {
       skipped.push('wbr:all:latest', 'exec:latest');
     }
+
+    // Benchmark views (L30D actuals vs category×tier target) — one per brand, in parallel.
+    await Promise.all(BRANDS.map(async b => {
+      try {
+        const bv = await computeBenchmarkView(b.slug);
+        if (!('error' in bv)) await set(`benchmark:${b.slug}:latest`, bv);
+        else failed.push(`benchmark:${b.slug}:latest(${bv.error})`);
+      } catch (e) { failed.push(`benchmark:${b.slug}:latest(${(e as Error).message})`); }
+    }));
 
     return NextResponse.json({ ok: failed.length === 0, ms: Date.now() - t0, stored, skipped, failed });
   } catch (e) {

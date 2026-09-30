@@ -24,6 +24,7 @@ export type Measures = {
   page_views: number;
   live_pv: number; video_pv: number; card_pv: number;         // page views by channel
   video_views: number;
+  videos_with_views: number; // distinct affiliate videos with views that week (denominator for Avg Views)
   units: number;
   orders: number;
   customers: number;
@@ -62,7 +63,7 @@ export type Measures = {
 const ZERO: Measures = {
   gmv: 0, video_gmv: 0, live_gmv: 0, card_gmv: 0, affiliate_gmv: 0, ad_spend: 0, ad_gmv: 0,
   aff_gmv_open: 0, aff_gmv_target: 0, aff_gmv_tap: 0,
-  subsidy: 0, subsidy_tiktok: 0, subsidy_seller: 0, impressions: 0, live_impr: 0, video_impr: 0, card_impr: 0, video_views: 0,
+  subsidy: 0, subsidy_tiktok: 0, subsidy_seller: 0, impressions: 0, live_impr: 0, video_impr: 0, card_impr: 0, video_views: 0, videos_with_views: 0,
   page_views: 0, live_pv: 0, video_pv: 0, card_pv: 0, units: 0, orders: 0, customers: 0,
   new_customers: 0, returning_customers: 0,
   late_orders: 0, order_rows: 0, hero_products: 0, refund_gmv: 0, new_videos: 0, active_creators: 0, likes: 0,
@@ -159,7 +160,8 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
        group by 1`, [s]),
     pool.query(
       `select to_char(date_trunc('week', vsd.date),'YYYY-MM-DD') wk,
-         sum(vsd.views) views, sum(vsd.likes) likes, sum(vsd.comments) comments, sum(vsd.shares) shares
+         sum(vsd.views) views, sum(vsd.likes) likes, sum(vsd.comments) comments, sum(vsd.shares) shares,
+         count(distinct vsd.video_id) videos_with_views
        from video_stat_rich_daily vsd join video v on v.id = vsd.video_id
        where v.shop_id = any($1) and vsd.date >= ${since}
        group by 1`, [s]),
@@ -217,7 +219,7 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
          where pr.date > (w.monday + interval '6 days') - interval '30 days'
            and pr.date <= w.monday + interval '6 days'
          group by pr.product_id
-         having sum(pr.gmv) >= 10000 and sum(pr.orders) >= 1000
+         having sum(pr.gmv) >= 30000 or sum(pr.orders) >= 1000
        ) h on true
        group by 1`, [s]),
     pool.query(
@@ -246,7 +248,7 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
   for (const r of aff.rows) bump(r.wk, m => { m.affiliate_gmv += n(r.aff_gmv); m.aff_gmv_open += n(r.aff_open); m.aff_gmv_target += n(r.aff_target); m.aff_gmv_tap += n(r.aff_tap); });
   for (const r of adv.rows) bump(r.wk, m => { m.ad_spend += n(r.ad_spend); m.ad_gmv += n(r.ad_gmv); });
   for (const r of vid.rows) bump(r.wk, m => { m.new_videos += n(r.new_videos); });
-  for (const r of vsd.rows) bump(r.wk, m => { m.video_views += n(r.views); m.likes += n(r.likes); m.comments += n(r.comments); m.shares += n(r.shares); });
+  for (const r of vsd.rows) bump(r.wk, m => { m.video_views += n(r.views); m.likes += n(r.likes); m.comments += n(r.comments); m.shares += n(r.shares); m.videos_with_views += n(r.videos_with_views); });
   for (const r of ret.rows) bump(r.wk, m => { m.refund_gmv += n(r.refund_gmv); });
   for (const r of smp.rows) bump(r.wk, m => { m.samples_applied += n(r.applied); });
   for (const r of smpAppr.rows) bump(r.wk, m => { m.samples_approved += n(r.approved); });

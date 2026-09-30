@@ -224,3 +224,11 @@ table.drv tr.drvsep td { padding: 4px 12px; font-size: 11px; font-weight: 700; l
   box-shadow: 0 6px 24px rgba(0,0,0,.28); pointer-events: none;
 }
 .infotip::after { content: ''; position: absolute; left: 50%; top: 100%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: #10182b; }
+
+/* Benchmark tab — attainment bar */
+table.bench .attcol { width: 180px; }
+table.bench .invhint { color: var(--muted); font-size: 11px; }
+.attwrap { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.attbar { flex: 1; height: 8px; max-width: 110px; background: var(--chip); border-radius: 999px; overflow: hidden; }
+.attfill { height: 100%; border-radius: 999px; }
+.attpct { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }

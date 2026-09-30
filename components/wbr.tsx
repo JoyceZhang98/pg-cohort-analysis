@@ -10,7 +10,7 @@ export const DEFINITIONS: Record<string, string> = {
   'GMV': 'Gross merchandise value from product_stat_rich_daily (Video + Live + Product-Card GMV).',
   'Subsidy Rate': 'TikTok Subsidy ÷ GMV with Subsidies — the platform-funded share of subsidized GMV. Lower is better.',
   'Affiliate GMV': 'GMV from affiliate orders, split by Open Plan / Target Plan / TAP.',
-  '# of Hero Products': 'Products with ≥ $10,000 GMV AND ≥ 1,000 orders over the trailing 30 days.',
+  '# of Hero Products': 'Products with ≥ $30,000 GMV OR ≥ 1,000 orders over the trailing 30 days.',
   'Halo Effect': 'External: incremental DTC / Amazon sales lift. Not sourced from TimescaleDB.',
   'EMV (Earned Media Value)': '(Video Views ÷ 1,000) × $/1,000-views + (Likes+Comments+Shares) × $/engagement.',
   'GPM (GMV per 1,000 views)': 'GMV ÷ Video Views × 1,000.',
@@ -22,7 +22,7 @@ export const DEFINITIONS: Record<string, string> = {
   'New Affiliate Videos': 'Videos posted by affiliates in the week; Active Creators = distinct posters.',
   'New L3+ Affiliate Videos': 'New videos from L3+ (higher-tier) creators.',
   '% of Videos from L3+': 'New L3+ videos ÷ all new videos.',
-  'Avg Views per Affiliate Video': 'Total video views ÷ new affiliate videos.',
+  'Avg Views per Affiliate Video': "That week's total affiliate video views ÷ the number of unique affiliate videos that had views that week.",
   'Ad Spend': 'GMV Max ad cost (gmv_max_campaign_stat_daily.cost). Drill-down: distinct creatives by delivery status each week (In Queue / Learning / Delivering / Not Delivering / Authorization Needed / Not Active / Unavailable / Excluded / Rejected — each creative counted by its latest status that week).',
   'Total Clicks': 'Product clicks (page views) across Video, Shop-Tab, and LIVE.',
   'Orders': 'Orders from product_stat_rich_daily.',
@@ -436,6 +436,65 @@ export function AdsByProduct({ brand, week }: { brand: string; week: string | nu
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------- Benchmark (ACTUAL vs category × tier target) ----------
+type BRow = { measure: string; fmt: Fmt; inverse: boolean; actual: number | null; benchmark: number | null; gap: number | null; attainment: number | null };
+type BData = { brand: string; slug: string; category: string; tier: string; lastMonthGmv: number; lastMonthLabel: string; rows: BRow[]; cachedAt?: string; error?: string };
+
+export function Benchmark({ brand }: { brand: string }) {
+  const [data, setData] = useState<BData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    setLoading(true); setErr('');
+    fetch(`/api/wbr/benchmark?brand=${brand}`).then(r => r.json()).then((d: BData) => {
+      d.error ? setErr(d.error) : setData(d);
+    }).catch(e => setErr(String(e))).finally(() => setLoading(false));
+  }, [brand]);
+
+  if (loading) return <div className="state">Loading benchmark…</div>;
+  if (err) return <div className="state err">Error: {err}</div>;
+  if (!data) return null;
+
+  return (
+    <div className="cohortblock">
+      <div className="cohorthead">
+        <h3>Benchmark <span className="pill">{data.category} · {data.tier}</span></h3>
+        <span className="sub">L30D actual vs the {data.category} · {data.tier} target · tier = {data.lastMonthLabel} GMV band +1</span>
+      </div>
+      <div className="tablecard">
+        <table className="exec bench">
+          <thead>
+            <tr><th className="lead">Measure</th><th>Actual</th><th>Benchmark</th><th>Gap</th><th className="attcol">Attainment</th></tr>
+          </thead>
+          <tbody>
+            {data.rows.map(r => {
+              const good = r.gap === null ? null : (r.inverse ? r.gap <= 0 : r.gap >= 0);
+              const gapColor = good === null ? 'var(--muted)' : good ? 'var(--up)' : 'var(--down)';
+              const attPct = r.attainment === null ? null : Math.round(r.attainment * 100);
+              const barPct = r.attainment === null ? 0 : Math.max(0, Math.min(r.attainment, 1)) * 100;
+              return (
+                <tr key={r.measure}>
+                  <td className="lead metric">{r.measure}{r.inverse && <span className="invhint" title="Lower is better"> ⬇</span>}</td>
+                  <td className="num strong">{fmtVal(r.actual, r.fmt)}</td>
+                  <td className="num">{fmtVal(r.benchmark, r.fmt)}</td>
+                  <td className="num" style={{ color: gapColor }}>{r.gap === null ? '—' : (r.gap >= 0 ? '+' : '') + fmtVal(r.gap, r.fmt)}</td>
+                  <td className="num attcol">
+                    <div className="attwrap">
+                      <div className="attbar"><div className="attfill" style={{ width: barPct + '%', background: good ? 'var(--up)' : 'var(--down)' }} /></div>
+                      <span className="attpct" style={{ color: gapColor }}>{attPct === null ? '—' : attPct + '%'}</span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="hint">Benchmark targets are the {data.category} category at tier {data.tier} (from the ops benchmark sheet). This month&rsquo;s tier = the GMV band {data.lastMonthLabel}&rsquo;s GMV fell into, plus one. Attainment = actual ÷ benchmark; rows marked ⬇ are inverse (lower is better).</p>
     </div>
   );
 }
