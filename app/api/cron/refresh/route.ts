@@ -21,6 +21,9 @@ function mondayOf(d: Date): string {
 //   2. Video-stats (vsd) locked ⇒ sales present but zero video views (zeroed Olay's Video Views).
 //   3. product_stat_daily locked ⇒ sales present but zero in-stock denominator (blanked the
 //      Unit-Weighted In-Stock Rate across every brand in one refresh).
+//   4. target_collaboration(_creator) locked ⇒ sales present but zero Target Plan invites (blanked
+//      New Chapter / Olay while smaller brands still returned). Every P&G brand runs targeted
+//      collaborations, so a 0 here is always a failed fetch, never a real value.
 function looksComplete(series: Map<string, Measures>): boolean {
   if (!series.size) return false;
   const cm = mondayOf(new Date());
@@ -28,10 +31,11 @@ function looksComplete(series: Map<string, Measures>): boolean {
   if (!weeks.length) return false;
   const m = series.get(weeks[weeks.length - 1])!;
   if (m.gmv > 0 && m.order_rows === 0) return false; // order tables likely locked
-  let gmvSum = 0, viewsSum = 0, instockDen = 0;
-  for (const w of weeks) { const x = series.get(w)!; gmvSum += x.gmv; viewsSum += x.video_views; instockDen += x.instock_den; }
+  let gmvSum = 0, viewsSum = 0, instockDen = 0, tpsSum = 0;
+  for (const w of weeks) { const x = series.get(w)!; gmvSum += x.gmv; viewsSum += x.video_views; instockDen += x.instock_den; tpsSum += x.target_plan_sends; }
   if (gmvSum > 0 && viewsSum === 0) return false;    // video-stats query came back blank
   if (gmvSum > 0 && instockDen === 0) return false;  // product_stat_daily (in-stock) came back blank
+  if (gmvSum > 0 && tpsSum === 0) return false;      // target-collaboration query came back blank
   return true;
 }
 
@@ -69,8 +73,13 @@ export async function GET(req: NextRequest) {
   };
 
   try {
-    // Per-brand in parallel: one fetch each, then store the brand tree; keep the series.
-    const per = await Promise.all(BRANDS.map(async b => {
+    // Per-brand SEQUENTIALLY (not Promise.all): each fetchWeekly already fires ~17 queries at once,
+    // so running 5 brands in parallel put ~85 queries against a pool of 10 — the heavy queries for
+    // the biggest brands (New Chapter, Olay) timed out under that contention and cached blanks
+    // (this is what zeroed Target Plan Invite Sent). One brand at a time keeps peak load ~17 and
+    // lets every query finish.
+    const per: { slug: string; series: Map<string, Measures>; complete: boolean }[] = [];
+    for (const b of BRANDS) {
       try {
         const series = await fetchWeekly([b.shopId], [b.supaName]);
         const complete = looksComplete(series);
@@ -79,14 +88,14 @@ export async function GET(req: NextRequest) {
           if (!('error' in view)) await set(`wbr:${b.slug}:latest`, view);
           else failed.push(`wbr:${b.slug}:latest(${view.error})`);
         } else {
-          skipped.push(`wbr:${b.slug}:latest`); // partial (order tables likely locked) — keep prior snapshot
+          skipped.push(`wbr:${b.slug}:latest`); // partial (a feed came back blank) — keep prior snapshot
         }
-        return { slug: b.slug, series, complete };
+        per.push({ slug: b.slug, series, complete });
       } catch (e) {
         failed.push(`wbr:${b.slug}:latest(${(e as Error).message})`);
-        return { slug: b.slug, series: new Map<string, Measures>(), complete: false };
+        per.push({ slug: b.slug, series: new Map<string, Measures>(), complete: false });
       }
-    }));
+    }
 
     const brandSeries: Record<string, Map<string, Measures>> = {};
     per.forEach(x => { brandSeries[x.slug] = x.series; });

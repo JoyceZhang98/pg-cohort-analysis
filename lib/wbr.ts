@@ -206,9 +206,13 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
        from video v where v.shop_id = any($1) and v.affiliate_id is not null and v.video_post_time >= ${since}
        group by 1`, [s]),
     pool.query(
-      `select to_char(date_trunc('week', tcc.created_at),'YYYY-MM-DD') wk, count(*) sends
-       from target_collaboration_creator tcc join target_collaboration tc on tc.id = tcc.target_collaboration_id
-       where tc.shop_id = any($1) and tcc.created_at >= ${since}
+      // Resolve the shop's collaboration ids first (small set), then count creator rows by that id
+      // list — lets Postgres use the target_collaboration_id index instead of joining every
+      // creator row to target_collaboration (faster, less likely to time out under an ETL lock).
+      `with ids as (select id from target_collaboration where shop_id = any($1))
+       select to_char(date_trunc('week', tcc.created_at),'YYYY-MM-DD') wk, count(*) sends
+       from target_collaboration_creator tcc
+       where tcc.target_collaboration_id in (select id from ids) and tcc.created_at >= ${since}
        group by 1`, [s]),
     pool.query(
       `with wk as (
