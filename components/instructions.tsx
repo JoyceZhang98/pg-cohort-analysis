@@ -29,7 +29,7 @@ const TREE: { group: string; rows: Def[] }[] = [
       ['New Affiliate Videos', 'video (by video_post_time)', 'count of videos posted in the period'],
       ['Avg Views per Affiliate Video', 'video_stat_rich_daily.views ÷ distinct video_id', 'weekly views ÷ unique affiliate videos with views that week'],
       ['Ad Spend', 'gmv_max_campaign_stat_daily.cost', 'Σ (GMV Max ad cost)'],
-      ['↳ Creatives by delivery status', 'gmv_max_creative_stat_daily.creative_delivery_status', 'distinct creatives per status each week (In Queue / Learning / Delivering / Not Delivering / Authorization Needed / Not Active / Unavailable / Excluded / Rejected), counted by each creative’s latest status that week'],
+      ['↳ Creatives by delivery status', 'gmv_max_creative_stat_daily.creative_delivery_status', 'distinct creatives in Learning vs Delivering each week, counted by each creative’s latest status that week'],
       ['Total Clicks', 'product_stat_rich_daily.page_views', 'Σ product clicks / page views (children: Video / Shop-Tab / LIVE) — placed just above Conversion'],
     ],
   },
