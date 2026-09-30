@@ -2,7 +2,7 @@ import { fetchWeekly, fetchLifetimeCreators, fetchMonthGoal, Measures } from './
 import { buildTree, mondaysEndingAt } from './wbrTree';
 import { BRANDS, brandBySlug } from './brands';
 import { pool } from './db';
-import { benchmarkTier, benchmarkValue, Tier, Category } from './benchmark';
+import { benchmarkTier, benchmarkValue, benchmarkGoals, Tier, Category } from './benchmark';
 
 // Monday (UTC) of the week containing `d`.
 function mondayOf(d: Date): string {
@@ -15,7 +15,7 @@ const rate = (n: number, d: number) => (d ? n / d : null);
 
 export type BrandView = {
   brand: string; slug: string; reportWeek: string; availableWeeks: string[];
-  tree: ReturnType<typeof buildTree>; generatedAt: string;
+  tree: ReturnType<typeof buildTree>; category: Category | null; tier: Tier | null; generatedAt: string;
 };
 
 // Full Brand Dashboard payload. Pass `series` to reuse an already-fetched weekly series.
@@ -40,8 +40,20 @@ export async function computeBrandView(
     fetchLifetimeCreators(shopIds, mondaysEndingAt(reportWeek, 13)).catch(() => ({} as Record<string, number>)),
     fetchMonthGoal(supaNames, reportWeek.slice(0, 7)),
   ]);
-  const tree = buildTree(s, lifetime, reportWeek, emvV, emvE, monthGoal);
-  return { brand: label, slug, reportWeek, availableWeeks, tree, generatedAt: new Date().toISOString() };
+  // Inline benchmark goals (single brand only): tier = last calendar month's GMV band +1.
+  let goals: Record<string, number> = {};
+  let category: Category | null = null, tier: Tier | null = null;
+  if (slug !== 'all') {
+    const b = brandBySlug(slug)!;
+    const now = new Date();
+    const lastMonthKey = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+    let lastMonthGmv = 0;
+    for (const [wk, m] of s) if (wk.slice(0, 7) === lastMonthKey) lastMonthGmv += m.gmv;
+    category = b.category; tier = benchmarkTier(b.category, lastMonthGmv);
+    goals = benchmarkGoals(b.category, tier);
+  }
+  const tree = buildTree(s, lifetime, reportWeek, emvV, emvE, monthGoal, goals);
+  return { brand: label, slug, reportWeek, availableWeeks, tree, category, tier, generatedAt: new Date().toISOString() };
 }
 
 const EXEC_METRICS: { key: string; label: string; fmt: 'money' | 'int' | 'pct' | 'x' | 'ratio'; f: (m: Measures) => number | null }[] = [

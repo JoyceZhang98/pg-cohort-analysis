@@ -111,3 +111,26 @@ export function benchmarkValue(category: Category, measure: string, tier: Tier):
   if (!row) return null;
   return row[TIERS.indexOf(tier)];
 }
+
+// Brand Dashboard metric label → benchmark sheet measure (for inline "Goal · attain" annotations).
+export const TREE_TO_BENCHMARK: Record<string, string> = {
+  'GMV': 'GMV (L30D)',
+  '# of Hero Products': 'Hero Products',
+  'CTR (Clicks / Impressions)': 'Product CTR',
+  'CTOR (Orders / Clicks)': 'C_O (SKU Order)',
+  'Ad Spend': 'Ads Investment',
+  'New Affiliate Videos': 'Creator Contents',
+  'New L3+ Affiliate Videos': 'L3+ Creator Contents',
+  'Samples Sent (Delivered)': 'Free Samples Delivered',
+  'Shop Health Score (SPS)': 'Shop SPS (L30D Avg)',
+};
+
+// { treeLabel → benchmark value } for a brand's category + tier.
+export function benchmarkGoals(category: Category, tier: Tier): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [treeLabel, measure] of Object.entries(TREE_TO_BENCHMARK)) {
+    const v = benchmarkValue(category, measure, tier);
+    if (v !== null) out[treeLabel] = v;
+  }
+  return out;
+}

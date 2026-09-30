@@ -180,6 +180,7 @@ const pctDelta = (a: number | null, b: number | null) => (a === null || b === nu
 export function buildTree(
   series: Map<string, Measures>, lifetimeByWeek: Record<string, number>,
   reportWeek: string, emvV: number, emvE: number, monthGoal = 0,
+  goals: Record<string, number> = {},
 ): Tree {
   // Only show a week column once all 7 of its days have fully elapsed (no partial weeks).
   const todayMs = Date.now();
@@ -250,7 +251,10 @@ export function buildTree(
       const row = compute(def.value, def.kind, def.inverse, def.fmt);
       row.label = def.label;
       row.external = def.external;
-      if (def.label === 'GMV' && monthGoal > 0) { row.goal = monthGoal; row.goalAttain = row.mtd !== null ? row.mtd / monthGoal : null; }
+      // Benchmark goal (category × tier) takes precedence; GMV falls back to the Supabase monthGoal.
+      const bench = goals[def.label];
+      if (bench != null && bench > 0) { row.goal = bench; row.goalAttain = row.mtd !== null ? row.mtd / bench : null; }
+      else if (def.label === 'GMV' && monthGoal > 0) { row.goal = monthGoal; row.goalAttain = row.mtd !== null ? row.mtd / monthGoal : null; }
       if (def.children) row.children = def.children.map(ch => { const r = compute(ch.value, 'flow', false, ch.fmt); r.label = ch.label; r.external = ch.external; return r; });
       return row;
     }),
