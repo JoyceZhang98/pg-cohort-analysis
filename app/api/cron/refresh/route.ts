@@ -14,10 +14,13 @@ function mondayOf(d: Date): string {
 }
 
 // Guard against caching partial data: when a hypertable is under an ETL AccessExclusiveLock its
-// query times out (30s) and comes back blank while other tables still return data. Two known holes:
-//   1. Order tables locked  ⇒ GMV present but zero orders.
-//   2. Video-stats (vsd) locked ⇒ sales present but zero video views (this zeroed Olay's Video Views
-//      in the Exec snapshot). We treat either as a partial fetch and must NOT overwrite good snapshots.
+// query times out (30s) and comes back blank while other tables still return data. Three known holes,
+// each detected as "sales present but this feed empty" — we treat any as a partial fetch and must
+// NOT overwrite good snapshots with it:
+//   1. Order tables locked      ⇒ GMV present but zero orders.
+//   2. Video-stats (vsd) locked ⇒ sales present but zero video views (zeroed Olay's Video Views).
+//   3. product_stat_daily locked ⇒ sales present but zero in-stock denominator (blanked the
+//      Unit-Weighted In-Stock Rate across every brand in one refresh).
 function looksComplete(series: Map<string, Measures>): boolean {
   if (!series.size) return false;
   const cm = mondayOf(new Date());
@@ -25,9 +28,10 @@ function looksComplete(series: Map<string, Measures>): boolean {
   if (!weeks.length) return false;
   const m = series.get(weeks[weeks.length - 1])!;
   if (m.gmv > 0 && m.order_rows === 0) return false; // order tables likely locked
-  let gmvSum = 0, viewsSum = 0;
-  for (const w of weeks) { const x = series.get(w)!; gmvSum += x.gmv; viewsSum += x.video_views; }
+  let gmvSum = 0, viewsSum = 0, instockDen = 0;
+  for (const w of weeks) { const x = series.get(w)!; gmvSum += x.gmv; viewsSum += x.video_views; instockDen += x.instock_den; }
   if (gmvSum > 0 && viewsSum === 0) return false;    // video-stats query came back blank
+  if (gmvSum > 0 && instockDen === 0) return false;  // product_stat_daily (in-stock) came back blank
   return true;
 }
 
