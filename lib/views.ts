@@ -1,4 +1,4 @@
-import { fetchWeekly, fetchLifetimeCreators, fetchMonthGoal, Measures } from './wbr';
+import { fetchWeekly, fetchLifetimeCreators, fetchMonthGoal, fetchL3Retention, Measures } from './wbr';
 import { supaL3Handles } from './supa';
 import { buildTree, mondaysEndingAt } from './wbrTree';
 import { BRANDS, brandBySlug } from './brands';
@@ -38,9 +38,10 @@ export async function computeBrandView(
   const availableWeeks = complete.slice(-10).reverse();
   const reportWeek = week && complete.includes(week) ? week : complete[complete.length - 1];
   const l3Handles = await supaL3Handles(supaNames).catch(() => [] as string[]);
-  const [lifetime, monthGoal] = await Promise.all([
+  const [lifetime, monthGoal, l3Retention] = await Promise.all([
     fetchLifetimeCreators(shopIds, mondaysEndingAt(reportWeek, 13), l3Handles).catch(() => ({ all: {}, l3: {} })),
     fetchMonthGoal(supaNames, reportWeek.slice(0, 7)),
+    fetchL3Retention(shopIds, mondaysEndingAt(reportWeek, 5), l3Handles).catch(() => ({} as Record<string, number>)),
   ]);
   // Inline benchmark goals (single brand only): tier = last calendar month's GMV band +1.
   let goals: Record<string, number> = {};
@@ -54,7 +55,7 @@ export async function computeBrandView(
     category = b.category; tier = benchmarkTier(b.category, lastMonthGmv);
     goals = benchmarkGoals(b.category, tier);
   }
-  const tree = buildTree(s, lifetime.all, reportWeek, emvV, emvE, monthGoal, goals, lifetime.l3);
+  const tree = buildTree(s, lifetime.all, reportWeek, emvV, emvE, monthGoal, goals, lifetime.l3, l3Retention);
   return { brand: label, slug, reportWeek, availableWeeks, tree, category, tier, generatedAt: new Date().toISOString() };
 }
 

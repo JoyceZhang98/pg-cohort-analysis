@@ -21,7 +21,7 @@ function fmtGmv(v: number) {
   return '$' + v;
 }
 
-export function Cohort({ brand }: { brand: string }) {
+export function Cohort({ brand, l3 = false }: { brand: string; l3?: boolean }) {
   const [view, setView] = useState<'retention' | 'gmv'>('retention');
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,10 +29,10 @@ export function Cohort({ brand }: { brand: string }) {
 
   useEffect(() => {
     setLoading(true); setErr('');
-    fetch(`/api/cohort?brand=${brand}`).then(r => r.json()).then((d: Data) => {
+    fetch(`/api/cohort?brand=${brand}${l3 ? '&l3=1' : ''}`).then(r => r.json()).then((d: Data) => {
       if (d.error) setErr(d.error); else setData(d);
     }).catch(e => setErr(String(e))).finally(() => setLoading(false));
-  }, [brand]);
+  }, [brand, l3]);
 
   const maxMonth = data?.maxMonth ?? 11;
   const months = Array.from({ length: maxMonth + 1 }, (_, i) => i);
@@ -43,7 +43,7 @@ export function Cohort({ brand }: { brand: string }) {
   return (
     <div className="cohortblock">
       <div className="cohorthead">
-        <h3>Creator Cohort Analysis</h3>
+        <h3>{l3 ? 'L3+ ' : ''}Creator Cohort Analysis</h3>
         <div className="toggle sm">
           <button className={view === 'retention' ? 'on' : ''} onClick={() => setView('retention')}>Retention %</button>
           <button className={view === 'gmv' ? 'on' : ''} onClick={() => setView('gmv')}>GMV by Cohort</button>

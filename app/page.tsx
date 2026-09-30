@@ -87,6 +87,7 @@ export default function Page() {
             <EmvInputs />
           </div>
           <MetricTree brand={brand} week={week} emvV={emvV} emvE={emvE} onMeta={onMeta} />
+          <Cohort brand={brand} l3 />
         </section>
       )}
 

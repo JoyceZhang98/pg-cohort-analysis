@@ -21,7 +21,7 @@ export type Driver = { driver: string; fmt: Fmt; thisWeek: number | null; lastWe
 export type Tree = {
   weeks: string[]; groups: Group[]; reportWeek: string;
   months: { mtd: string; prior: string };
-  drivers: { total: Driver | null; rows: Driver[]; biggest: number };
+  drivers: { total: Driver | null; rows: Driver[]; biggest: number; extra: Driver[] };
 };
 
 type Kind = 'flow' | 'rate' | 'snapshot';
@@ -41,8 +41,12 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
     group: 'GMV', super: 'HEADLINE',
     items: [
       { label: 'GMV with Subsidies', fmt: 'money', kind: 'flow', value: m => m.gmv + m.subsidy,
-        children: [c('GMV', 'money', m => m.gmv), c('TikTok Subsidy', 'money', m => m.subsidy_tiktok), c('Seller Subsidy', 'money', m => m.subsidy_seller)] },
-      { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', value: m => rate(m.subsidy_tiktok, m.gmv + m.subsidy) },
+        children: [
+          c('GMV', 'money', m => m.gmv),
+          c('TikTok Subsidy', 'money', m => m.subsidy_tiktok),
+          c('Subsidy Rate', 'pct', m => rate(m.subsidy_tiktok, m.gmv + m.subsidy)),
+          c('Seller Subsidy', 'money', m => m.subsidy_seller),
+        ] },
       { label: 'GMV', fmt: 'money', kind: 'flow', value: m => m.gmv,
         children: [c('Video GMV %', 'pct', m => rate(m.video_gmv, m.gmv)), c('Product-Card GMV %', 'pct', m => rate(m.card_gmv, m.gmv)), c('Live GMV %', 'pct', m => rate(m.live_gmv, m.gmv))] },
       { label: 'Affiliate GMV', fmt: 'money', kind: 'flow', value: m => m.affiliate_gmv,
@@ -87,12 +91,17 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
       { label: 'Impressions', fmt: 'int', kind: 'flow', value: m => m.impressions,
         children: [c('Video Impressions', 'int', m => m.video_impr), c('Shop-Tab Impressions', 'int', m => m.card_impr), c('LIVE Impressions', 'int', m => m.live_impr)] },
       { label: 'Video Views', fmt: 'int', kind: 'flow', value: m => m.video_views,
-        children: [c('L3+ Affiliate Video Views', 'int', m => m.l3_video_views || null)] },
+        children: [
+          c('Seller Video Views', 'int', m => m.seller_video_views),
+          c('Affiliate Video Views', 'int', m => m.affiliate_video_views),
+          c('L3+ Affiliate Video Views', 'int', m => m.l3_video_views || null),
+        ] },
       { label: 'New Affiliate Videos', fmt: 'int', kind: 'flow', value: m => m.new_videos,
         children: [c('Active Creators (Creators Posting)', 'int', m => m.active_creators)] },
       { label: 'New L3+ Affiliate Videos', fmt: 'int', kind: 'flow', value: m => m.new_l3_videos,
         children: [c('Active L3+ Creators', 'int', m => m.active_l3_creators)] },
       { label: '% of Videos from L3+', fmt: 'pct', kind: 'rate', value: m => rate(m.new_l3_videos, m.l3_total_videos) },
+      { label: 'L3+ Retention Rate', fmt: 'pct', kind: 'snapshot', value: () => null },
       { label: 'Avg Views per Affiliate Video', fmt: 'int', kind: 'rate', value: m => rate(m.video_views, m.videos_with_views),
         children: [c('Video Views', 'int', m => m.video_views), c('Unique Affiliate Videos (with views)', 'int', m => m.videos_with_views)] },
       { label: 'Avg Views per L3+ Affiliate Video', fmt: 'int', kind: 'rate', value: m => rate(m.l3_video_views, m.l3_videos_with_views),
@@ -175,6 +184,7 @@ export function buildTree(
   series: Map<string, Measures>, lifetimeByWeek: Record<string, number>,
   reportWeek: string, emvV: number, emvE: number, monthGoal = 0,
   goals: Record<string, number> = {}, l3LifetimeByWeek: Record<string, number> = {},
+  l3RetentionByWeek: Record<string, number> = {},
 ): Tree {
   // Only show a week column once all 7 of its days have fully elapsed (no partial weeks).
   const todayMs = Date.now();
@@ -235,6 +245,15 @@ export function buildTree(
     logDelta: gT !== null && gL !== null && gT > 0 && gL > 0 ? 100 * Math.log(gT / gL) : null,
   };
 
+  // Supplementary context row (not part of the multiplicative identity): Unit-Weighted In-Stock Rate.
+  const isT = reportWk ? rate(reportWk.instock_num, reportWk.instock_den) : null;
+  const isL = prevWk ? rate(prevWk.instock_num, prevWk.instock_den) : null;
+  const inStock: Driver = {
+    driver: 'Unit-Weighted In-Stock Rate', fmt: 'pct', thisWeek: isT, lastWeek: isL,
+    wowAbs: isT !== null && isL !== null ? isT - isL : null, wowPct: pctDelta(isT, isL),
+    logDelta: isT !== null && isL !== null && isT > 0 && isL > 0 ? 100 * Math.log(isT / isL) : null,
+  };
+
   const shortMonth = (mondayKey: string) => new Date(mondayKey + 'T00:00:00Z').toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
   const months = { mtd: shortMonth(reportWeek), prior: shortMonth(priorWeeks[0] ?? mondaysEndingAt(reportWeek, 6)[0]) };
 
@@ -242,7 +261,10 @@ export function buildTree(
     name: g.group,
     super: g.super,
     rows: g.items.map(def => {
-      const row = compute(def.value, def.kind, def.inverse, def.fmt);
+      // L3+ Retention Rate is a month-over-month snapshot fed by its own map (not a weekly measure).
+      const row = def.label === 'L3+ Retention Rate'
+        ? compute((_m, _v, _e, r) => r, 'snapshot', false, def.fmt, l3RetentionByWeek)
+        : compute(def.value, def.kind, def.inverse, def.fmt);
       row.label = def.label;
       row.external = def.external;
       // Benchmark goal (category × tier) takes precedence; GMV falls back to the Supabase monthGoal.
@@ -260,5 +282,5 @@ export function buildTree(
     }),
   }));
 
-  return { weeks: trailing, groups, reportWeek, months, drivers: { total: gmvTotal, rows: driverRows, biggest } };
+  return { weeks: trailing, groups, reportWeek, months, drivers: { total: gmvTotal, rows: driverRows, biggest, extra: [inStock] } };
 }

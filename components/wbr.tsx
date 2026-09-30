@@ -22,6 +22,7 @@ export const DEFINITIONS: Record<string, string> = {
   'New Affiliate Videos': 'Videos posted by affiliates in the week; Active Creators = distinct posters.',
   'New L3+ Affiliate Videos': 'New videos from L3+ (higher-tier) creators.',
   '% of Videos from L3+': 'New L3+ videos ÷ all new videos.',
+  'L3+ Retention Rate': 'Month-over-month: of L3+ creators who posted last calendar month, the share who also posted this month.',
   'Avg Views per Affiliate Video': "That week's total affiliate video views ÷ the number of unique affiliate videos that had views that week.",
   'Avg Views per L3+ Affiliate Video': "L3+ creators' video views ÷ their unique videos with views that week. L3+ creators are matched from Supabase (daily_newvideo_creatorlevel) to TimescaleDB affiliates by handle.",
   'Ad Spend': 'GMV Max ad cost (gmv_max_campaign_stat_daily.cost). Drill-down: distinct creatives in Learning vs Delivering each week (gmv_max_creative_stat_daily.creative_delivery_status, each creative counted by its latest status that week).',
@@ -118,7 +119,7 @@ type Row = {
   children?: Row[];
 };
 type Driver = { driver: string; fmt: Fmt; thisWeek: number | null; lastWeek: number | null; wowAbs: number | null; wowPct: number | null; logDelta: number | null };
-type Tree = { weeks: string[]; groups: { name: string; super?: string; rows: Row[] }[]; reportWeek: string; months: { mtd: string; prior: string }; drivers: { total: Driver | null; rows: Driver[]; biggest: number } };
+type Tree = { weeks: string[]; groups: { name: string; super?: string; rows: Row[] }[]; reportWeek: string; months: { mtd: string; prior: string }; drivers: { total: Driver | null; rows: Driver[]; biggest: number; extra: Driver[] } };
 type WbrData = { brand: string; reportWeek: string; availableWeeks: string[]; tree: Tree; error?: string };
 
 // Monday key → compact week range, e.g. "Aug 24–30" or cross-month "Aug 31–Sep 6".
@@ -189,7 +190,7 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
           <tr>
             {data.tree.weeks.map(w => <th key={w}>{wkLabel(w)}</th>)}
             <th>Δ</th><th>%</th>
-            <th>MTD ({data.tree.months.mtd})</th><th>Prior ({data.tree.months.prior})</th>
+            <th>MTD ({data.tree.months.mtd})</th><th>Prior Month ({data.tree.months.prior})</th>
           </tr>
         </thead>
         <tbody>
@@ -231,7 +232,7 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
   );
 }
 
-function DriverCheck({ drivers, weeks }: { drivers: { total: Driver | null; rows: Driver[]; biggest: number }; weeks: string[] }) {
+function DriverCheck({ drivers, weeks }: { drivers: { total: Driver | null; rows: Driver[]; biggest: number; extra: Driver[] }; weeks: string[] }) {
   if (!drivers?.rows?.length) return null;
   const fmtDrv = (v: number | null, f: Fmt) => fmtVal(v, f);
   const thisWk = weeks.length ? wkLabel(weeks[weeks.length - 1]) : 'This Week';
@@ -239,6 +240,7 @@ function DriverCheck({ drivers, weeks }: { drivers: { total: Driver | null; rows
   return (
     <div className="drivercard">
       <div className="cohorthead"><h3>GMV Driver Check <Info text="GMV = Impressions × CTR × CTOR × AOV holds exactly. The biggest mover is picked by |Log Δ| (100·ln(this ÷ last)): log growth is symmetric between a rise and a fall, and the four drivers' Log Δs sum to GMV's own." /></h3><span className="sub">report week vs. prior week</span></div>
+      <div className="drformula">GMV = Impressions × CTR × CTOR × AOV</div>
       <div className="tablecard">
         <table className="exec drv">
           <thead><tr><th className="lead">Driver</th><th>{thisWk}</th><th>{lastWk}</th><th>WoW Δ</th><th>WoW %</th><th>Log Δ (pts)</th></tr></thead>
@@ -264,6 +266,22 @@ function DriverCheck({ drivers, weeks }: { drivers: { total: Driver | null; rows
                 <td className="num" style={{ color: deltaColor(d.logDelta) }}>{d.logDelta === null ? '—' : (d.logDelta >= 0 ? '+' : '') + d.logDelta.toFixed(1) + ' pts'}</td>
               </tr>
             ))}
+            {drivers.extra?.length ? (
+              <>
+                <tr className="drvgap"><td colSpan={6}>&nbsp;</td></tr>
+                <tr className="drvsep"><td className="lead" colSpan={6}>availability context</td></tr>
+                {drivers.extra.map(d => (
+                  <tr key={d.driver}>
+                    <td className="lead metric">{d.driver}</td>
+                    <td className="num strong">{fmtDrv(d.thisWeek, d.fmt)}</td>
+                    <td className="num">{fmtDrv(d.lastWeek, d.fmt)}</td>
+                    <td className="num" style={{ color: deltaColor(d.wowAbs) }}>{fmtDelta(d.wowAbs, d.fmt)}</td>
+                    <td className="num" style={{ color: deltaColor(d.wowPct) }}>{d.wowPct === null ? '—' : (d.wowPct >= 0 ? '+' : '') + (d.wowPct * 100).toFixed(1) + '%'}</td>
+                    <td className="num">—</td>
+                  </tr>
+                ))}
+              </>
+            ) : null}
           </tbody>
         </table>
       </div>

@@ -25,6 +25,8 @@ export type Measures = {
   live_pv: number; video_pv: number; card_pv: number;         // page views by channel
   video_views: number;
   videos_with_views: number; // distinct affiliate videos with views that week (denominator for Avg Views)
+  seller_video_views: number;    // views on seller/brand-posted videos (affiliate_id null)
+  affiliate_video_views: number; // views on affiliate/creator videos (affiliate_id not null)
   units: number;
   orders: number;
   customers: number;
@@ -75,7 +77,7 @@ const ZERO: Measures = {
   cd_auth_needed: 0, cd_not_active: 0, cd_unavailable: 0, cd_excluded: 0, cd_rejected: 0,
   skus_live: 0, skus_oos: 0, instock_num: 0, instock_den: 0,
   sps: 0, new_l3_videos: 0, active_l3_creators: 0, l3_total_videos: 0,
-  l3_video_views: 0, l3_videos_with_views: 0,
+  l3_video_views: 0, l3_videos_with_views: 0, seller_video_views: 0, affiliate_video_views: 0,
 };
 
 const WEEKS_BACK = 16;
@@ -168,7 +170,9 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
          sum(vsd.views) views, sum(vsd.likes) likes, sum(vsd.comments) comments, sum(vsd.shares) shares,
          count(distinct vsd.video_id) videos_with_views,
          sum(vsd.views) filter (where lower(af.username) = any($2)) l3_views,
-         count(distinct vsd.video_id) filter (where lower(af.username) = any($2)) l3_vids
+         count(distinct vsd.video_id) filter (where lower(af.username) = any($2)) l3_vids,
+         sum(vsd.views) filter (where v.affiliate_id is null) seller_views,
+         sum(vsd.views) filter (where v.affiliate_id is not null) affiliate_views
        from video_stat_rich_daily vsd join video v on v.id = vsd.video_id
          left join affiliate af on af.id = v.affiliate_id
        where v.shop_id = any($1) and vsd.date >= ${since}
@@ -256,7 +260,7 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
   for (const r of aff.rows) bump(r.wk, m => { m.affiliate_gmv += n(r.aff_gmv); m.aff_gmv_open += n(r.aff_open); m.aff_gmv_target += n(r.aff_target); m.aff_gmv_tap += n(r.aff_tap); });
   for (const r of adv.rows) bump(r.wk, m => { m.ad_spend += n(r.ad_spend); m.ad_gmv += n(r.ad_gmv); });
   for (const r of vid.rows) bump(r.wk, m => { m.new_videos += n(r.new_videos); });
-  for (const r of vsd.rows) bump(r.wk, m => { m.video_views += n(r.views); m.likes += n(r.likes); m.comments += n(r.comments); m.shares += n(r.shares); m.videos_with_views += n(r.videos_with_views); m.l3_video_views += n(r.l3_views); m.l3_videos_with_views += n(r.l3_vids); });
+  for (const r of vsd.rows) bump(r.wk, m => { m.video_views += n(r.views); m.likes += n(r.likes); m.comments += n(r.comments); m.shares += n(r.shares); m.videos_with_views += n(r.videos_with_views); m.l3_video_views += n(r.l3_views); m.l3_videos_with_views += n(r.l3_vids); m.seller_video_views += n(r.seller_views); m.affiliate_video_views += n(r.affiliate_views); });
   for (const r of ret.rows) bump(r.wk, m => { m.refund_gmv += n(r.refund_gmv); });
   for (const r of smp.rows) bump(r.wk, m => { m.samples_applied += n(r.applied); });
   for (const r of smpAppr.rows) bump(r.wk, m => { m.samples_approved += n(r.approved); });
@@ -319,6 +323,31 @@ export async function fetchLifetimeCreators(
     l3[wk] = firsts.filter(f => f.t <= end && f.l3).length;
   }
   return { all, l3 };
+}
+
+// Month-over-month L3+ creator retention, per week: of L3+ creators who posted in the calendar
+// month BEFORE that week's month, the share who also posted in that week's month. Best-effort {} .
+export async function fetchL3Retention(shopIds: string[], weekMondays: string[], l3Handles: string[]): Promise<Record<string, number>> {
+  if (!l3Handles.length) return {};
+  try {
+    const { rows } = await pool.query<{ u: string; mo: string }>(
+      `select distinct lower(af.username) u, to_char(date_trunc('month', v.video_post_time),'YYYY-MM') mo
+       from video v join affiliate af on af.id = v.affiliate_id
+       where v.shop_id = any($1) and v.video_post_time >= current_date - interval '7 months'
+         and lower(af.username) = any($2)`, [shopIds, l3Handles]);
+    const byMonth = new Map<string, Set<string>>();
+    for (const r of rows) { if (!byMonth.has(r.mo)) byMonth.set(r.mo, new Set()); byMonth.get(r.mo)!.add(r.u); }
+    const out: Record<string, number> = {};
+    for (const wk of weekMondays) {
+      const [y, m] = wk.slice(0, 7).split('-').map(Number);
+      const prev = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
+      const base = byMonth.get(prev), cur = byMonth.get(wk.slice(0, 7));
+      if (!base || base.size === 0) continue; // no L3+ base last month → leave blank
+      let retained = 0; if (cur) for (const h of base) if (cur.has(h)) retained++;
+      out[wk] = retained / base.size;
+    }
+    return out;
+  } catch { return {}; }
 }
 
 // Sum a subset of weekly measures over the given week keys.

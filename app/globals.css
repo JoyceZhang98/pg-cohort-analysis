@@ -232,3 +232,8 @@ table.bench .invhint { color: var(--muted); font-size: 11px; }
 .attbar { flex: 1; height: 8px; max-width: 110px; background: var(--chip); border-radius: 999px; overflow: hidden; }
 .attfill { height: 100%; border-radius: 999px; }
 .attpct { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+
+/* GMV Driver Check — prominent formula line + spacer before availability context */
+.drformula { font-size: 14px; font-weight: 800; letter-spacing: .02em; margin: 2px 0 10px; color: var(--ink); }
+table.drv tr.drvgap td { height: 14px; border: none; background: transparent; padding: 0; }
+@media (prefers-color-scheme: dark) { .drformula { color: #e8ecf3; } }
