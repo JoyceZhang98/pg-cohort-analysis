@@ -93,9 +93,9 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
         children: [c('Video Impressions', 'int', m => m.video_impr), c('Shop-Tab Impressions', 'int', m => m.card_impr), c('LIVE Impressions', 'int', m => m.live_impr)] },
       { label: 'Video Views', fmt: 'int', kind: 'flow', value: m => m.video_views,
         children: [
-          c('Seller Video Views', 'int', m => m.seller_video_views),
           c('Affiliate Video Views', 'int', m => m.affiliate_video_views),
           c('L3+ Affiliate Video Views', 'int', m => m.l3_video_views || null),
+          c('Seller Video Views', 'int', m => m.seller_video_views),
         ] },
       { label: 'New Affiliate Videos', fmt: 'int', kind: 'flow', value: m => m.new_videos,
         children: [c('Active Creators (Creators Posting)', 'int', m => m.active_creators)] },
