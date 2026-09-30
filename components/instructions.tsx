@@ -27,7 +27,7 @@ const TREE: { group: string; rows: Def[] }[] = [
       ['Impressions', 'product_stat_rich_daily.impressions', 'Σ (children: Video / Shop-Tab / LIVE)'],
       ['Video Views', 'video_stat_rich_daily.views', 'Σ'],
       ['New Affiliate Videos', 'video (by video_post_time)', 'count of videos posted in the period'],
-      ['Avg Views per Affiliate Video', 'video_stat_rich_daily.views ÷ distinct video_id', 'weekly views ÷ unique affiliate videos with views that week'],
+      ['Avg Views per Affiliate Video', 'video_stat_rich_daily.views (affiliate) ÷ distinct affiliate video_id', 'affiliate views ÷ unique affiliate videos with views; monthly uses month-distinct videos (not the sum of weekly distincts)'],
       ['Ad Spend', 'gmv_max_campaign_stat_daily.cost', 'Σ (GMV Max ad cost)'],
       ['↳ Creatives by delivery status', 'gmv_max_creative_stat_daily.creative_delivery_status', 'distinct creatives in Learning vs Delivering each week, counted by each creative’s latest status that week'],
       ['Total Clicks', 'product_stat_rich_daily.page_views', 'Σ product clicks / page views (children: Video / Shop-Tab / LIVE) — placed just above Conversion'],

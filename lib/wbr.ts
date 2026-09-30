@@ -168,7 +168,7 @@ export async function fetchWeekly(shopIds: string[], supaNames: string[] = []): 
     pool.query(
       `select to_char(date_trunc('week', vsd.date),'YYYY-MM-DD') wk,
          sum(vsd.views) views, sum(vsd.likes) likes, sum(vsd.comments) comments, sum(vsd.shares) shares,
-         count(distinct vsd.video_id) videos_with_views,
+         count(distinct vsd.video_id) filter (where v.affiliate_id is not null) videos_with_views,
          sum(vsd.views) filter (where lower(af.username) = any($2)) l3_views,
          count(distinct vsd.video_id) filter (where lower(af.username) = any($2)) l3_vids,
          sum(vsd.views) filter (where v.affiliate_id is null) seller_views,
@@ -346,6 +346,28 @@ export async function fetchL3Retention(shopIds: string[], weekMondays: string[],
       let retained = 0; if (cur) for (const h of base) if (cur.has(h)) retained++;
       out[wk] = retained / base.size;
     }
+    return out;
+  } catch { return {}; }
+}
+
+// Distinct affiliate videos with views per CALENDAR MONTH (and the L3+ subset). This is the correct
+// monthly denominator for "Avg Views per Affiliate Video": a video that receives views across several
+// weeks of a month must count ONCE for the month — summing the weekly distinct counts double-counts it
+// and badly inflates the denominator (deflating the monthly average). Best-effort {}.
+export async function fetchMonthlyVideoDistinct(
+  shopIds: string[], l3Handles: string[],
+): Promise<Record<string, { aff: number; l3: number }>> {
+  try {
+    const { rows } = await pool.query<{ mo: string; aff: string; l3: string }>(
+      `select to_char(date_trunc('month', vsd.date),'YYYY-MM') mo,
+         count(distinct vsd.video_id) filter (where v.affiliate_id is not null) aff,
+         count(distinct vsd.video_id) filter (where lower(af.username) = any($2)) l3
+       from video_stat_rich_daily vsd join video v on v.id = vsd.video_id
+         left join affiliate af on af.id = v.affiliate_id
+       where v.shop_id = any($1) and vsd.date >= current_date - interval '${WEEKS_BACK} weeks'
+       group by 1`, [shopIds, l3Handles.length ? l3Handles : ['']]);
+    const out: Record<string, { aff: number; l3: number }> = {};
+    for (const r of rows) out[r.mo] = { aff: Number(r.aff), l3: Number(r.l3) };
     return out;
   } catch { return {}; }
 }

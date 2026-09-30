@@ -82,7 +82,7 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
       { label: 'Lifetime Creators', fmt: 'int', kind: 'snapshot', value: (_m, _v, _e, lifetime) => lifetime,
         children: [c('Lifetime L3+ Creators', 'int', (_m, _v, _e, lt) => lt)] },
       { label: 'Total Customers', fmt: 'int', kind: 'flow', value: m => m.customers,
-        children: [c('New Customers', 'int', m => m.new_customers), c('Returning Customers', 'int', m => m.returning_customers)] },
+        children: [c('New Customers', 'int', m => m.new_customers), c('Repeating Customers', 'int', m => m.returning_customers)] },
     ],
   },
   {
@@ -102,8 +102,8 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
         children: [c('Active L3+ Creators', 'int', m => m.active_l3_creators)] },
       { label: '% of Videos from L3+', fmt: 'pct', kind: 'rate', value: m => rate(m.new_l3_videos, m.l3_total_videos) },
       { label: 'L3+ Retention Rate', fmt: 'pct', kind: 'snapshot', value: () => null },
-      { label: 'Avg Views per Affiliate Video', fmt: 'int', kind: 'rate', value: m => rate(m.video_views, m.videos_with_views),
-        children: [c('Video Views', 'int', m => m.video_views), c('Unique Affiliate Videos (with views)', 'int', m => m.videos_with_views)] },
+      { label: 'Avg Views per Affiliate Video', fmt: 'int', kind: 'rate', value: m => rate(m.affiliate_video_views, m.videos_with_views),
+        children: [c('Affiliate Video Views', 'int', m => m.affiliate_video_views), c('Unique Affiliate Videos (with views)', 'int', m => m.videos_with_views)] },
       { label: 'Avg Views per L3+ Affiliate Video', fmt: 'int', kind: 'rate', value: m => rate(m.l3_video_views, m.l3_videos_with_views),
         children: [c('L3+ Video Views', 'int', m => m.l3_video_views || null), c('Unique L3+ Videos (with views)', 'int', m => m.l3_videos_with_views || null)] },
       { label: 'Ad Spend', fmt: 'money', kind: 'flow', value: m => m.ad_spend,
@@ -185,6 +185,7 @@ export function buildTree(
   reportWeek: string, emvV: number, emvE: number, monthGoal = 0,
   goals: Record<string, number> = {}, l3LifetimeByWeek: Record<string, number> = {},
   l3RetentionByWeek: Record<string, number> = {},
+  monthDistinctByMonth: Record<string, { aff: number; l3: number }> = {},
 ): Tree {
   // Only show a week column once all 7 of its days have fully elapsed (no partial weeks).
   const todayMs = Date.now();
@@ -195,6 +196,29 @@ export function buildTree(
   const priorMonth = monthOf(mondaysEndingAt(reportWeek, 6)[0]);
   const mtdWeeks = span.filter(w => monthOf(w) === repMonth && w <= reportWeek);
   const priorWeeks = span.filter(w => monthOf(w) === priorMonth);
+
+  // Monthly averages of views-per-video must use MONTH-distinct video counts (a video viewed across
+  // several weeks counts once for the month), not the sum of weekly distinct counts. The views
+  // numerator is additive across weeks, so it comes from summing; only the denominator is overridden.
+  const md = (mo: string) => monthDistinctByMonth[mo] ?? { aff: 0, l3: 0 };
+  const denAffMtd = md(repMonth).aff, denAffPrior = md(priorMonth).aff;
+  const denL3Mtd = md(repMonth).l3, denL3Prior = md(priorMonth).l3;
+  const affViews = (weeks: string[]) => (weeks.length ? sumWeeks(series, weeks).affiliate_video_views : 0);
+  const l3Views = (weeks: string[]) => (weeks.length ? sumWeeks(series, weeks).l3_video_views : 0);
+  const overrideMonthly = (row: Row, label: string) => {
+    if (label === 'Avg Views per Affiliate Video') {
+      row.mtd = denAffMtd ? affViews(mtdWeeks) / denAffMtd : null;
+      row.prior = denAffPrior ? affViews(priorWeeks) / denAffPrior : null;
+    } else if (label === 'Avg Views per L3+ Affiliate Video') {
+      row.mtd = denL3Mtd ? l3Views(mtdWeeks) / denL3Mtd : null;
+      row.prior = denL3Prior ? l3Views(priorWeeks) / denL3Prior : null;
+    } else if (label === 'Unique Affiliate Videos (with views)') {
+      row.mtd = denAffMtd || null; row.prior = denAffPrior || null;
+    } else if (label === 'Unique L3+ Videos (with views)') {
+      row.mtd = denL3Mtd || null; row.prior = denL3Prior || null;
+    } else return;
+    row.momPct = pctDelta(row.mtd, row.prior);
+  };
 
   const compute = (value: ValFn, kind: Kind, inverse?: boolean, fmt: Fmt = 'int', lifeMap: Record<string, number> = lifetimeByWeek): Row => {
     const periodVal = (weeks: string[]): number | null => {
@@ -267,6 +291,7 @@ export function buildTree(
         : compute(def.value, def.kind, def.inverse, def.fmt);
       row.label = def.label;
       row.external = def.external;
+      overrideMonthly(row, def.label);
       // Benchmark goal (category × tier) takes precedence; GMV falls back to the Supabase monthGoal.
       const bench = goals[def.label];
       if (bench != null && bench > 0) { row.goal = bench; row.goalAttain = row.mtd !== null ? row.mtd / bench : null; }
@@ -276,7 +301,7 @@ export function buildTree(
         const r = ch.label === 'Lifetime L3+ Creators'
           ? compute((_m, _v, _e, lt) => lt, 'snapshot', false, ch.fmt, l3LifetimeByWeek)
           : compute(ch.value, 'flow', false, ch.fmt);
-        r.label = ch.label; r.external = ch.external; return r;
+        r.label = ch.label; r.external = ch.external; overrideMonthly(r, ch.label); return r;
       });
       return row;
     }),
