@@ -113,7 +113,7 @@ export function Spark({ values, inverse }: { values: (number | null)[]; inverse?
 }
 
 type Row = {
-  label: string; fmt: Fmt; inverse?: boolean; external?: boolean;
+  label: string; fmt: Fmt; inverse?: boolean; external?: boolean; sub?: boolean;
   weekly: (number | null)[]; wowAbs: number | null; wowPct: number | null; mtd: number | null; prior: number | null; momPct: number | null;
   goal?: number | null; goalAttain?: number | null;
   children?: Row[];
@@ -216,7 +216,7 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
                     </tr>
                     {hasKids && isOpen && r.children!.map(ch => (
                       <tr key={r.label + '/' + ch.label} className={`childrow${ch.external ? ' extrow' : ''}`}>
-                        <td className="lead metric child">{ch.label}{ch.external && <span className="exttag" title="No TimescaleDB source — external data pending">external</span>}</td>
+                        <td className={`lead metric child${ch.sub ? ' subchild' : ''}`}>{ch.label}{ch.external && <span className="exttag" title="No TimescaleDB source — external data pending">external</span>}</td>
                         {cellsFor(ch)}
                       </tr>
                     ))}

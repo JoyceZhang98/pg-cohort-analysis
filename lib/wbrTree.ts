@@ -12,6 +12,7 @@ export type Row = {
   prior: number | null;   // prior-full-month absolute value
   momPct: number | null;
   external?: boolean;     // template metric with no TimescaleDB source (placeholder)
+  sub?: boolean;          // render one indent level deeper (a sub-metric of the child above it)
   goal?: number | null;      // monthly goal (Supabase brand_gmv_goal)
   goalAttain?: number | null; // MTD ÷ goal
   children?: Row[]; // raw components behind a ratio / composite (drill-down)
@@ -26,12 +27,12 @@ export type Tree = {
 
 type Kind = 'flow' | 'rate' | 'snapshot';
 type ValFn = (m: Measures, emvV: number, emvE: number, lifetime: number) => number | null;
-type Child = { label: string; fmt: Fmt; value: ValFn; external?: boolean };
+type Child = { label: string; fmt: Fmt; value: ValFn; external?: boolean; sub?: boolean };
 type Def = { label: string; fmt: Fmt; kind: Kind; inverse?: boolean; value: ValFn; children?: Child[]; external?: boolean };
 
 const rate = (num: number, den: number) => (den ? num / den : null);
 // component shorthands (all flows)
-const c = (label: string, fmt: Fmt, value: ValFn): Child => ({ label, fmt, value });
+const c = (label: string, fmt: Fmt, value: ValFn, sub = false): Child => ({ label, fmt, value, sub: sub || undefined });
 // external = template metric with no TimescaleDB source → placeholder (all cells blank)
 const ext = (label: string, fmt: Fmt): Def => ({ label, fmt, kind: 'flow', value: () => null, external: true });
 const xc = (label: string, fmt: Fmt): Child => ({ label, fmt, value: () => null, external: true });
@@ -44,7 +45,7 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
         children: [
           c('GMV', 'money', m => m.gmv),
           c('TikTok Subsidy', 'money', m => m.subsidy_tiktok),
-          c('Subsidy Rate', 'pct', m => rate(m.subsidy_tiktok, m.gmv + m.subsidy)),
+          c('TTS Subsidy Rate', 'pct', m => rate(m.subsidy_tiktok, m.gmv + m.subsidy), true),
           c('Seller Subsidy', 'money', m => m.subsidy_seller),
         ] },
       { label: 'GMV', fmt: 'money', kind: 'flow', value: m => m.gmv,
@@ -301,7 +302,7 @@ export function buildTree(
         const r = ch.label === 'Lifetime L3+ Creators'
           ? compute((_m, _v, _e, lt) => lt, 'snapshot', false, ch.fmt, l3LifetimeByWeek)
           : compute(ch.value, 'flow', false, ch.fmt);
-        r.label = ch.label; r.external = ch.external; overrideMonthly(r, ch.label); return r;
+        r.label = ch.label; r.external = ch.external; r.sub = ch.sub; overrideMonthly(r, ch.label); return r;
       });
       return row;
     }),
