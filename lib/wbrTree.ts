@@ -125,13 +125,11 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
           c('Video CTR', 'pct', m => rate(m.video_pv, m.video_impr)),
           c('Shop-Tab CTR', 'pct', m => rate(m.card_pv, m.card_impr)),
           c('LIVE CTR', 'pct', m => rate(m.live_pv, m.live_impr)),
-          c('Add-to-Cart Rate (LIVE)', 'pct', m => rate(m.cart_adds, m.cart_impr)),
         ] },
       { label: 'CTOR (Orders / Clicks)', fmt: 'pct', kind: 'rate', value: m => rate(m.orders, m.page_views),
         children: [
           c('Orders', 'int', m => m.orders),
           c('Total Clicks', 'int', m => m.page_views),
-          c('Cart → Order Conversion (LIVE)', 'pct', m => rate(m.cart_orders, m.cart_adds)),
         ] },
     ],
   },

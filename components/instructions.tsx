@@ -38,9 +38,7 @@ const TREE: { group: string; rows: Def[] }[] = [
     rows: [
       ['Orders', 'product_stat_rich_daily.orders', 'Σ'],
       ['CTR (Clicks / Impressions)', 'product_stat_rich_daily.page_views ÷ .impressions', 'Clicks ÷ Impressions'],
-      ['↳ Add-to-Cart Rate (LIVE)', 'product_live_stat_rich_daily.add_to_cart_count ÷ .product_impressions', 'LIVE add-to-carts ÷ LIVE product impressions (how much traffic enters the cart; LIVE-channel only)'],
       ['CTOR (Orders / Clicks)', 'product_stat_rich_daily.orders ÷ .page_views', 'Orders ÷ Clicks'],
-      ['↳ Cart→Order Conversion (LIVE)', 'product_live_stat_rich_daily.sku_orders ÷ .add_to_cart_count', 'LIVE SKU orders ÷ add-to-carts (how many carts convert to orders; LIVE-channel only)'],
     ],
   },
   {
