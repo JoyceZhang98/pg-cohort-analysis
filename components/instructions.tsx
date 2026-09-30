@@ -10,7 +10,7 @@ const TREE: { group: string; rows: Def[] }[] = [
       ['GMV with Subsidies', 'product_stat_rich_daily.gmv + line_item.platform_discount, seller_discount', 'GMV + TikTok Subsidy + Seller Subsidy'],
       ['TikTok Subsidy / Seller Subsidy', 'line_item.platform_discount / .seller_discount', 'platform-funded vs seller-funded discount, split'],
       ['Affiliate GMV', 'affiliate_order.price_amount, quantity', 'Σ price_amount × quantity'],
-      ['Subsidy Rate ⬇', 'line_item.platform_discount', 'TikTok Subsidy ÷ (GMV + Subsidy)'],
+      ['Subsidy Rate', 'line_item.platform_discount', 'TikTok Subsidy ÷ (GMV + Subsidy)'],
       ['GMV channel mix', 'product_stat_rich_daily.video_gmv / live_gmv / product_card_gmv', 'GMV drill-down shows Video / Live / Product-Card GMV as % of GMV'],
       ['# of Hero Products', 'product_stat_rich_daily.gmv, orders (trailing 30d, per product)', 'count of products with ≥ $30,000 GMV OR ≥ 1,000 orders over the last 30 days (snapshot)'],
       ['GPM', 'product_stat_rich_daily.gmv ÷ video_stat_rich_daily.views', 'GMV ÷ Views × 1,000'],

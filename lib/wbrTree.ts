@@ -44,7 +44,7 @@ const DEFS: { group: string; super?: string; items: Def[] }[] = [
         children: [c('GMV', 'money', m => m.gmv), c('TikTok Subsidy', 'money', m => m.subsidy_tiktok), c('Seller Subsidy', 'money', m => m.subsidy_seller)] },
       { label: 'GMV', fmt: 'money', kind: 'flow', value: m => m.gmv,
         children: [c('Video GMV %', 'pct', m => rate(m.video_gmv, m.gmv)), c('Product-Card GMV %', 'pct', m => rate(m.card_gmv, m.gmv)), c('Live GMV %', 'pct', m => rate(m.live_gmv, m.gmv))] },
-      { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', inverse: true, value: m => rate(m.subsidy_tiktok, m.gmv + m.subsidy) },
+      { label: 'Subsidy Rate', fmt: 'pct', kind: 'rate', value: m => rate(m.subsidy_tiktok, m.gmv + m.subsidy) },
       { label: 'Affiliate GMV', fmt: 'money', kind: 'flow', value: m => m.affiliate_gmv,
         children: [
           c('Open Plan %', 'pct', m => rate(m.aff_gmv_open, m.affiliate_gmv)),

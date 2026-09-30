@@ -8,7 +8,7 @@ export type Fmt = 'money' | 'int' | 'pct' | 'x' | 'ratio';
 export const DEFINITIONS: Record<string, string> = {
   'GMV with Subsidies': 'Merchant GMV plus subsidies: GMV + TikTok Subsidy + Seller Subsidy.',
   'GMV': 'Gross merchandise value from product_stat_rich_daily (Video + Live + Product-Card GMV).',
-  'Subsidy Rate': 'TikTok Subsidy ÷ GMV with Subsidies — the platform-funded share of subsidized GMV. Lower is better.',
+  'Subsidy Rate': 'TikTok Subsidy ÷ GMV with Subsidies — the platform-funded share of subsidized GMV.',
   'Affiliate GMV': 'GMV from affiliate orders, split by Open Plan / Target Plan / TAP.',
   '# of Hero Products': 'Products with ≥ $30,000 GMV OR ≥ 1,000 orders over the trailing 30 days.',
   'Halo Effect': 'External: incremental DTC / Amazon sales lift. Not sourced from TimescaleDB.',
