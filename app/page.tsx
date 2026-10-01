@@ -4,14 +4,7 @@ import { useState } from 'react';
 import { MetricTree, ExecSummary, Funnel, AdsByProduct, Benchmark, Info } from '@/components/wbr';
 import { Cohort } from '@/components/cohort';
 import { Instructions } from '@/components/instructions';
-
-const BRANDS = [
-  { slug: 'new-chapter', label: 'New Chapter' },
-  { slug: 'farmacy', label: 'Farmacy' },
-  { slug: 'olay', label: 'Olay' },
-  { slug: 'secret', label: 'Secret' },
-  { slug: 'old-spice', label: 'Old Spice' },
-];
+import { BRANDS, WORKSPACE, SINGLE_BRAND } from '@/lib/brands';
 type Tab = 'instructions' | 'exec' | 'brand' | 'benchmark' | 'internal';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'instructions', label: 'Instructions' },
@@ -56,8 +49,8 @@ export default function Page() {
 
   return (
     <div className="wrap">
-      <h1>P&amp;G Social Commerce — Weekly Business Report</h1>
-      <p className="sub">All P&amp;G TikTok Shop brands · recalculates live from TimescaleDB</p>
+      <h1>{WORKSPACE.label} — Weekly Business Report</h1>
+      <p className="sub">{WORKSPACE.subtitle} · recalculates live from TimescaleDB</p>
 
       <div className="tabs">
         {TABS.map(t => (
@@ -111,7 +104,7 @@ export default function Page() {
           <div className="controls">
             <label className="ctl"><span>SCOPE</span>
               <select value={internalScope} onChange={e => setInternalScope(e.target.value)}>
-                <option value="all">Total (all P&amp;G)</option>
+                <option value="all">{WORKSPACE.rollupLabel}</option>
                 {BRANDS.map(b => <option key={b.slug} value={b.slug}>{b.label} (deep-dive)</option>)}
               </select>
             </label>
@@ -119,7 +112,7 @@ export default function Page() {
           </div>
           <Funnel brand={internalScope} week={week} />
           <AdsByProduct brand={internalScope} week={week} />
-          <Cohort brand={internalScope === 'all' ? 'new-chapter' : internalScope} />
+          <Cohort brand={internalScope === 'all' ? BRANDS[0].slug : internalScope} />
         </section>
       )}
     </div>

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fetchWeekly, Measures } from '@/lib/wbr';
 import { computeBrandView, computeExecView, computeBenchmarkView } from '@/lib/views';
 import { cacheSet } from '@/lib/cache';
-import { BRANDS } from '@/lib/brands';
+import { BRANDS, WORKSPACE } from '@/lib/brands';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -22,8 +22,11 @@ function mondayOf(d: Date): string {
 //   3. product_stat_daily locked ⇒ sales present but zero in-stock denominator (blanked the
 //      Unit-Weighted In-Stock Rate across every brand in one refresh).
 //   4. target_collaboration(_creator) locked ⇒ sales present but zero Target Plan invites (blanked
-//      New Chapter / Olay while smaller brands still returned). Every P&G brand runs targeted
-//      collaborations, so a 0 here is always a failed fetch, never a real value.
+//      New Chapter / Olay while smaller brands still returned).
+// Orders + video are universal (any selling brand has both). In-stock and Target Plan are opt-in per
+// workspace (WORKSPACE.requireInstock / requireTps): a brand can legitimately have no targeted
+// collaborations, or a shop whose product_stat_daily is too slow to read — for those a 0 is real, not
+// a failed fetch, so gating on it would wrongly skip the brand forever.
 function looksComplete(series: Map<string, Measures>): boolean {
   if (!series.size) return false;
   const cm = mondayOf(new Date());
@@ -34,8 +37,8 @@ function looksComplete(series: Map<string, Measures>): boolean {
   let gmvSum = 0, viewsSum = 0, instockDen = 0, tpsSum = 0;
   for (const w of weeks) { const x = series.get(w)!; gmvSum += x.gmv; viewsSum += x.video_views; instockDen += x.instock_den; tpsSum += x.target_plan_sends; }
   if (gmvSum > 0 && viewsSum === 0) return false;    // video-stats query came back blank
-  if (gmvSum > 0 && instockDen === 0) return false;  // product_stat_daily (in-stock) came back blank
-  if (gmvSum > 0 && tpsSum === 0) return false;      // target-collaboration query came back blank
+  if (WORKSPACE.requireInstock && gmvSum > 0 && instockDen === 0) return false; // in-stock blank
+  if (WORKSPACE.requireTps && gmvSum > 0 && tpsSum === 0) return false;         // target-collab blank
   return true;
 }
 

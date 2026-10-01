@@ -1,7 +1,7 @@
 import { fetchWeekly, fetchLifetimeCreators, fetchMonthGoal, fetchL3Retention, fetchMonthlyVideoDistinct, Measures } from './wbr';
 import { supaL3Handles } from './supa';
 import { buildTree, mondaysEndingAt } from './wbrTree';
-import { BRANDS, brandBySlug } from './brands';
+import { BRANDS, brandBySlug, WORKSPACE } from './brands';
 import { pool } from './db';
 import { benchmarkTier, benchmarkValue, benchmarkGoals, Tier, Category } from './benchmark';
 
@@ -25,7 +25,7 @@ export async function computeBrandView(
 ): Promise<BrandView | { error: string }> {
   let shopIds: string[]; let supaNames: string[]; let label: string;
   if (slug === 'all') {
-    shopIds = BRANDS.map(b => b.shopId); supaNames = BRANDS.map(b => b.supaName); label = 'All P&G';
+    shopIds = BRANDS.map(b => b.shopId); supaNames = BRANDS.map(b => b.supaName); label = WORKSPACE.rollupLabel;
   } else {
     const b = brandBySlug(slug);
     if (!b) return { error: 'unknown brand' };

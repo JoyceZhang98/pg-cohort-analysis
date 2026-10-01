@@ -5,11 +5,17 @@ const URL_ = () => (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE
 const KEY_ = () => process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const ready = () => !!(URL_() && KEY_());
 
+// Snapshots live in one shared Supabase table, so each dashboard (brand set) namespaces its keys to
+// avoid clobbering another's 'all' / 'exec' snapshots. Default P&G keeps bare keys (unchanged); any
+// other workspace (e.g. coco-eve) prefixes every key with its id.
+const NS = (process.env.NEXT_PUBLIC_BRAND_SET || 'png').toLowerCase();
+const nsKey = (key: string) => (NS === 'png' ? key : `${NS}:${key}`);
+
 export async function cacheGet<T = unknown>(key: string): Promise<{ payload: T; updatedAt: string } | null> {
   if (!ready()) return null;
   try {
     const res = await fetch(
-      `${URL_()}/rest/v1/wbr_cache?cache_key=eq.${encodeURIComponent(key)}&select=payload,updated_at`,
+      `${URL_()}/rest/v1/wbr_cache?cache_key=eq.${encodeURIComponent(nsKey(key))}&select=payload,updated_at`,
       { headers: { apikey: KEY_(), Authorization: `Bearer ${KEY_()}` }, signal: AbortSignal.timeout(5000) },
     );
     if (!res.ok) return null;
@@ -29,7 +35,7 @@ export async function cacheSet(key: string, payload: unknown): Promise<boolean> 
         apikey: KEY_(), Authorization: `Bearer ${KEY_()}`,
         'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal',
       },
-      body: JSON.stringify({ cache_key: key, payload, updated_at: new Date().toISOString() }),
+      body: JSON.stringify({ cache_key: nsKey(key), payload, updated_at: new Date().toISOString() }),
       signal: AbortSignal.timeout(10000),
     });
     return res.ok;

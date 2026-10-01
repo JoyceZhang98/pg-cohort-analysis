@@ -96,6 +96,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       brand: brand.label,
       slug: brand.slug,
+      l3,
       maxMonth,
       cohorts,
       generatedAt: new Date().toISOString(),
