@@ -67,6 +67,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // On-demand workspaces (e.g. all-brands, ~80 brands) are computed live per request and have no
+  // precompute — a daily cron would just hammer the DB for minutes and time out. No-op here.
+  if (WORKSPACE.onDemand) {
+    return NextResponse.json({ ok: true, skipped: 'on-demand workspace — no precompute', workspace: WORKSPACE.id });
+  }
+
   const t0 = Date.now();
   const stored: string[] = [];
   const failed: string[] = [];

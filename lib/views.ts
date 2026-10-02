@@ -47,14 +47,14 @@ export async function computeBrandView(
   // Inline benchmark goals (single brand only): tier = last calendar month's GMV band +1.
   let goals: Record<string, number> = {};
   let category: Category | null = null, tier: Tier | null = null;
-  if (slug !== 'all') {
+  if (slug !== 'all' && brandBySlug(slug)?.category) {
     const b = brandBySlug(slug)!;
     const now = new Date();
     const lastMonthKey = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
     let lastMonthGmv = 0;
     for (const [wk, m] of s) if (wk.slice(0, 7) === lastMonthKey) lastMonthGmv += m.gmv;
-    category = b.category; tier = benchmarkTier(b.category, lastMonthGmv);
-    goals = benchmarkGoals(b.category, tier);
+    category = b.category; tier = benchmarkTier(b.category!, lastMonthGmv);
+    goals = benchmarkGoals(b.category!, tier);
   }
   const tree = buildTree(s, lifetime.all, reportWeek, emvV, emvE, monthGoal, goals, lifetime.l3, l3Retention, monthDistinct);
   return { brand: label, slug, reportWeek, availableWeeks, tree, category, tier, generatedAt: new Date().toISOString() };
@@ -133,7 +133,7 @@ export type BenchmarkRow = {
   actual: number | null; benchmark: number | null; gap: number | null; attainment: number | null;
 };
 export type BenchmarkView = {
-  brand: string; slug: string; category: Category; tier: Tier;
+  brand: string; slug: string; category: Category | null; tier: Tier | null;
   lastMonthGmv: number; lastMonthLabel: string; rows: BenchmarkRow[]; generatedAt: string;
 };
 
@@ -212,13 +212,19 @@ export async function computeBenchmarkView(slug: string): Promise<BenchmarkView 
   const b = brandBySlug(slug);
   if (!b) return { error: 'unknown brand' };
   const [agg, hero] = await Promise.all([fetchBenchmarkActuals(b.shopId), fetchHero30d(b.shopId)]);
-  const tier = benchmarkTier(b.category, agg.last_month_gmv);
   const lastMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1));
   const lastMonthLabel = lastMonth.toLocaleString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 
+  // No benchmark column set for this brand's category (e.g. Food / Pet) → return an empty benchmark.
+  if (!b.category) {
+    return { brand: b.label, slug, category: null, tier: null, lastMonthGmv: agg.last_month_gmv, lastMonthLabel, rows: [], generatedAt: new Date().toISOString() };
+  }
+  const cat = b.category;
+  const tier = benchmarkTier(cat, agg.last_month_gmv);
+
   const rows: BenchmarkRow[] = BM_MEASURES.map(m => {
     const actual = m.measure === 'Hero Products' ? hero : m.f(agg);
-    const benchmark = benchmarkValue(b.category, m.measure, tier);
+    const benchmark = benchmarkValue(cat, m.measure, tier);
     const gap = actual !== null && benchmark !== null ? actual - benchmark : null;
     const attainment = actual !== null && benchmark ? actual / benchmark : null;
     return { measure: m.measure, fmt: m.fmt, inverse: !!m.inverse, actual, benchmark, gap, attainment };

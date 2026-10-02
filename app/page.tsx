@@ -21,9 +21,9 @@ const wkLabel = (k: string) => {
 };
 
 export default function Page() {
-  const [tab, setTab] = useState<Tab>('exec');
-  const [brand, setBrand] = useState('new-chapter');
-  const [internalScope, setInternalScope] = useState('all');
+  const [tab, setTab] = useState<Tab>(WORKSPACE.showExec ? 'exec' : 'brand');
+  const [brand, setBrand] = useState(BRANDS[0].slug);
+  const [internalScope, setInternalScope] = useState(WORKSPACE.showExec ? 'all' : BRANDS[0].slug);
   const [week, setWeek] = useState<string | null>(null);
   const [weeks, setWeeks] = useState<string[]>([]);
   const [emvV, setEmvV] = useState(10.0);
@@ -53,7 +53,7 @@ export default function Page() {
       <p className="sub">{WORKSPACE.subtitle} · recalculates live from TimescaleDB</p>
 
       <div className="tabs">
-        {TABS.map(t => (
+        {TABS.filter(t => WORKSPACE.showExec || t.id !== 'exec').map(t => (
           <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>{t.label}</button>
         ))}
       </div>
@@ -104,7 +104,7 @@ export default function Page() {
           <div className="controls">
             <label className="ctl"><span>SCOPE</span>
               <select value={internalScope} onChange={e => setInternalScope(e.target.value)}>
-                <option value="all">{WORKSPACE.rollupLabel}</option>
+                {WORKSPACE.showExec && <option value="all">{WORKSPACE.rollupLabel}</option>}
                 {BRANDS.map(b => <option key={b.slug} value={b.slug}>{b.label} (deep-dive)</option>)}
               </select>
             </label>
