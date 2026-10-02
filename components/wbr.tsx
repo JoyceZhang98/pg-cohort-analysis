@@ -114,12 +114,12 @@ export function Spark({ values, inverse }: { values: (number | null)[]; inverse?
 
 type Row = {
   label: string; fmt: Fmt; inverse?: boolean; external?: boolean; sub?: boolean;
-  weekly: (number | null)[]; wowAbs: number | null; wowPct: number | null; mtd: number | null; prior: number | null; momPct: number | null;
+  weekly: (number | null)[]; wowAbs: number | null; wowPct: number | null; mtd: number | null; prior: number | null; prior2: number | null; momPct: number | null;
   goal?: number | null; goalAttain?: number | null;
   children?: Row[];
 };
 type Driver = { driver: string; fmt: Fmt; thisWeek: number | null; lastWeek: number | null; wowAbs: number | null; wowPct: number | null; logDelta: number | null };
-type Tree = { weeks: string[]; groups: { name: string; super?: string; rows: Row[] }[]; reportWeek: string; months: { mtd: string; prior: string }; drivers: { total: Driver | null; rows: Driver[]; biggest: number; extra: Driver[] } };
+type Tree = { weeks: string[]; groups: { name: string; super?: string; rows: Row[] }[]; reportWeek: string; months: { mtd: string; prior: string; prior2: string }; drivers: { total: Driver | null; rows: Driver[]; biggest: number; extra: Driver[] } };
 type WbrData = { brand: string; reportWeek: string; availableWeeks: string[]; tree: Tree; error?: string };
 
 // Monday key → compact week range, e.g. "Aug 24–30" or cross-month "Aug 31–Sep 6".
@@ -171,6 +171,7 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
         {r.goal ? <div className="goalnote">Goal {fmtVal(r.goal, r.fmt)} · {r.goalAttain != null ? (r.goalAttain * 100).toFixed(1) : '—'}% attain</div> : null}
       </td>
       <td className="num">{fmtVal(r.prior, r.fmt)}</td>
+      <td className="num">{fmtVal(r.prior2, r.fmt)}</td>
     </>
   );
 
@@ -185,21 +186,21 @@ export function MetricTree({ brand, emvV, emvE, week, onMeta }: {
             <th colSpan={data.tree.weeks.length}>TRAILING {data.tree.weeks.length} WEEKS (full weeks only)</th>
             <th rowSpan={2}>Trend</th>
             <th colSpan={2}>WEEK OVER WEEK</th>
-            <th colSpan={2}>MONTH TO DATE</th>
+            <th colSpan={3}>MONTH TO DATE</th>
           </tr>
           <tr>
             {data.tree.weeks.map(w => <th key={w}>{wkLabel(w)}</th>)}
             <th>Δ</th><th>%</th>
-            <th>MTD ({data.tree.months.mtd})</th><th>Prior Month ({data.tree.months.prior})</th>
+            <th>MTD ({data.tree.months.mtd})</th><th>Prior Month ({data.tree.months.prior})</th><th>2 Mo Prior ({data.tree.months.prior2})</th>
           </tr>
         </thead>
         <tbody>
           {data.tree.groups.map((g, gi) => (
             <Fragment key={g.name}>
               {g.super && g.super !== data.tree.groups[gi - 1]?.super && (
-                <tr className="superrow"><td colSpan={data.tree.weeks.length + 6}>{g.super}</td></tr>
+                <tr className="superrow"><td colSpan={data.tree.weeks.length + 7}>{g.super}</td></tr>
               )}
-              <tr className={g.super ? 'grouprow sub' : 'grouprow'}><td colSpan={data.tree.weeks.length + 6}>{g.name}</td></tr>
+              <tr className={g.super ? 'grouprow sub' : 'grouprow'}><td colSpan={data.tree.weeks.length + 7}>{g.name}</td></tr>
               {g.rows.map(r => {
                 const hasKids = !!r.children?.length;
                 const isOpen = open.has(r.label);

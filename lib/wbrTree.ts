@@ -9,7 +9,8 @@ export type Row = {
   wowAbs: number | null;
   wowPct: number | null;
   mtd: number | null;
-  prior: number | null;   // prior-full-month absolute value
+  prior: number | null;   // prior-full-month absolute value (1 month before report month)
+  prior2: number | null;  // the month before that (2 months before report month)
   momPct: number | null;
   external?: boolean;     // template metric with no TimescaleDB source (placeholder)
   sub?: boolean;          // render one indent level deeper (a sub-metric of the child above it)
@@ -190,31 +191,38 @@ export function buildTree(
   const todayMs = Date.now();
   const weekComplete = (monday: string) => new Date(monday + 'T00:00:00Z').getTime() + 7 * 864e5 <= todayMs;
   const trailing = mondaysEndingAt(reportWeek, 5).filter(weekComplete);
-  const span = mondaysEndingAt(reportWeek, 13);
+  const span = mondaysEndingAt(reportWeek, 16);
   const repMonth = monthOf(reportWeek);
   const priorMonth = monthOf(mondaysEndingAt(reportWeek, 6)[0]);
+  // Month 2 before the report month (e.g. report Sep → Aug is prior, Jul is prior2). Date-math so it
+  // is always exactly two calendar months back regardless of how the weeks fall.
+  const [ry, rm] = repMonth.split('-').map(Number);
+  const prior2Month = new Date(Date.UTC(ry, rm - 1 - 2, 1)).toISOString().slice(0, 7);
   const mtdWeeks = span.filter(w => monthOf(w) === repMonth && w <= reportWeek);
   const priorWeeks = span.filter(w => monthOf(w) === priorMonth);
+  const prior2Weeks = span.filter(w => monthOf(w) === prior2Month);
 
   // Monthly averages of views-per-video must use MONTH-distinct video counts (a video viewed across
   // several weeks counts once for the month), not the sum of weekly distinct counts. The views
   // numerator is additive across weeks, so it comes from summing; only the denominator is overridden.
   const md = (mo: string) => monthDistinctByMonth[mo] ?? { aff: 0, l3: 0 };
-  const denAffMtd = md(repMonth).aff, denAffPrior = md(priorMonth).aff;
-  const denL3Mtd = md(repMonth).l3, denL3Prior = md(priorMonth).l3;
+  const denAffMtd = md(repMonth).aff, denAffPrior = md(priorMonth).aff, denAffPrior2 = md(prior2Month).aff;
+  const denL3Mtd = md(repMonth).l3, denL3Prior = md(priorMonth).l3, denL3Prior2 = md(prior2Month).l3;
   const affViews = (weeks: string[]) => (weeks.length ? sumWeeks(series, weeks).affiliate_video_views : 0);
   const l3Views = (weeks: string[]) => (weeks.length ? sumWeeks(series, weeks).l3_video_views : 0);
   const overrideMonthly = (row: Row, label: string) => {
     if (label === 'Avg Views per Affiliate Video') {
       row.mtd = denAffMtd ? affViews(mtdWeeks) / denAffMtd : null;
       row.prior = denAffPrior ? affViews(priorWeeks) / denAffPrior : null;
+      row.prior2 = denAffPrior2 ? affViews(prior2Weeks) / denAffPrior2 : null;
     } else if (label === 'Avg Views per L3+ Affiliate Video') {
       row.mtd = denL3Mtd ? l3Views(mtdWeeks) / denL3Mtd : null;
       row.prior = denL3Prior ? l3Views(priorWeeks) / denL3Prior : null;
+      row.prior2 = denL3Prior2 ? l3Views(prior2Weeks) / denL3Prior2 : null;
     } else if (label === 'Unique Affiliate Videos (with views)') {
-      row.mtd = denAffMtd || null; row.prior = denAffPrior || null;
+      row.mtd = denAffMtd || null; row.prior = denAffPrior || null; row.prior2 = denAffPrior2 || null;
     } else if (label === 'Unique L3+ Videos (with views)') {
-      row.mtd = denL3Mtd || null; row.prior = denL3Prior || null;
+      row.mtd = denL3Mtd || null; row.prior = denL3Prior || null; row.prior2 = denL3Prior2 || null;
     } else return;
     row.momPct = pctDelta(row.mtd, row.prior);
   };
@@ -233,11 +241,11 @@ export function buildTree(
     };
     const weekly = trailing.map(w => (series.has(w) || kind === 'snapshot' ? weekVal(w) : null));
     const cur = weekly[weekly.length - 1], prev = weekly[weekly.length - 2];
-    const mtd = periodVal(mtdWeeks), prior = periodVal(priorWeeks);
+    const mtd = periodVal(mtdWeeks), prior = periodVal(priorWeeks), prior2 = periodVal(prior2Weeks);
     return {
       label: '', fmt, inverse, weekly,
       wowAbs: cur !== null && prev !== null ? cur - prev : null,
-      wowPct: pctDelta(cur, prev), mtd, prior, momPct: pctDelta(mtd, prior),
+      wowPct: pctDelta(cur, prev), mtd, prior, prior2, momPct: pctDelta(mtd, prior),
     };
   };
 
@@ -278,7 +286,11 @@ export function buildTree(
   };
 
   const shortMonth = (mondayKey: string) => new Date(mondayKey + 'T00:00:00Z').toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
-  const months = { mtd: shortMonth(reportWeek), prior: shortMonth(priorWeeks[0] ?? mondaysEndingAt(reportWeek, 6)[0]) };
+  const months = {
+    mtd: shortMonth(reportWeek),
+    prior: shortMonth(priorWeeks[0] ?? mondaysEndingAt(reportWeek, 6)[0]),
+    prior2: shortMonth(prior2Weeks[0] ?? `${prior2Month}-15`),
+  };
 
   const groups: Group[] = DEFS.map(g => ({
     name: g.group,
